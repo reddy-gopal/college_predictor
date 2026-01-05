@@ -1,0 +1,131 @@
+:root {
+  /* Primary Colors - Blue (Trust, Education) */
+  --primary-600: #2563EB;
+  --primary-700: #1D4ED8;
+  --primary-500: #3B82F6;
+  --primary-50: #EFF6FF;
+  
+  /* Secondary Colors - Teal/Cyan (Modern, Fresh) */
+  --secondary-600: #0891B2;
+  --secondary-500: #06B6D4;
+  --secondary-50: #ECFEFF;
+  
+  /* Accent Colors */
+  --accent-purple: #7C3AED;
+  --accent-purple-light: #EDE9FE;
+  
+  /* Success/Green */
+  --success-500: #10B981;
+  --success-50: #ECFDF5;
+  --success-700: #047857;
+  
+  /* Warning/Yellow */
+  --warning-500: #F59E0B;
+  --warning-50: #FFFBEB;
+  --warning-700: #B45309;
+  
+  /* Error/Red */
+  --error-500: #EF4444;
+  --error-50: #FEF2F2;
+  
+  /* Neutral Colors */
+  --gray-900: #111827;
+  --gray-800: #1F2937;
+  --gray-700: #374151;
+  --gray-600: #4B5563;
+  --gray-500: #6B7280;
+  --gray-400: #9CA3AF;
+  --gray-300: #D1D5DB;
+  --gray-200: #E5E7EB;
+  --gray-100: #F3F4F6;
+  --gray-50: #F9FAFB;
+  --white: #FFFFFF;
+  
+  /* Typography */
+  --font-family-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 
+    'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', 
+    sans-serif;
+  --font-family-heading: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 
+    'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', 
+    sans-serif;
+  
+  font-family: var(--font-family-primary);
+  line-height: 1.6;
+  font-weight: 400;
+
+  color-scheme: light;
+  color: var(--gray-900);
+  background-color: var(--white);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  font-weight: 500;
+  color: var(--primary-600);
+  text-decoration: inherit;
+}
+a:hover {
+  color: var(--primary-700);
+}
+
+* {
+  font-family: var(--font-family-primary);
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: var(--white);
+  color: var(--gray-900);
+  font-family: var(--font-family-primary);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-family-heading);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+  color: var(--gray-900);
+}
+
+h2 {
+  color: var(--gray-900);
+}
+
+button {
+  border-radius: 8px;
+  border: 1px solid var(--primary-600);
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: var(--font-family-primary);
+  background-color: var(--primary-600);
+  color: var(--white);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+button:hover {
+  background-color: var(--primary-700);
+  color: var(--white);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+button:focus,
+button:focus-visible {
+  outline: 2px solid var(--primary-600);
+  outline-offset: 2px;
+}
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}

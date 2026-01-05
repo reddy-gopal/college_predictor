@@ -1,0 +1,199 @@
+.how-it-works {
+    margin-top: 5rem;
+    padding: 4rem 1rem;
+    background-color: #fafafa;
+    border-radius: 24px;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Background decoration */
+.how-it-works::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #1a1a1a, #666);
+    opacity: 0.1;
+}
+
+.hiw-title {
+    text-align: center;
+    font-size: 2rem;
+    font-weight: 800;
+    margin-bottom: 4rem;
+    color: #1a1a1a;
+    letter-spacing: -0.5px;
+}
+
+.hiw-steps {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.hiw-step-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 1.5rem;
+    background: #ffffff;
+    border-radius: 16px;
+    /* box-shadow: 0 4px 20px rgba(0,0,0,0.04); */
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    transition: all 0.3s ease;
+    position: relative;
+    opacity: 0;
+    animation: cardEntry 0.6s ease-out forwards;
+}
+
+.hiw-step-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+    border-color: rgba(0, 0, 0, 0.1);
+}
+
+.hiw-icon-wrapper {
+    width: 72px;
+    height: 72px;
+    background: #f0f0f0;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1.5rem;
+    transition: all 0.3s ease;
+    position: relative;
+    z-index: 1;
+}
+
+.hiw-step-card:hover .hiw-icon-wrapper {
+    background: #1a1a1a;
+    transform: scale(1.1) rotate(5deg);
+}
+
+.hiw-icon {
+    font-size: 2rem;
+    filter: grayscale(100%);
+    transition: all 0.3s ease;
+}
+
+.hiw-step-card:hover .hiw-icon {
+    filter: grayscale(0%);
+    transform: scale(1.1);
+    /* Slightly enlarge emoji/icon on hover */
+}
+
+.hiw-step-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+    color: #1a1a1a;
+}
+
+.hiw-step-desc {
+    font-size: 0.95rem;
+    color: #666;
+    line-height: 1.6;
+}
+
+/* Step Number Badge */
+.hiw-step-card::after {
+    content: counter(step-counter);
+    counter-increment: step-counter;
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    width: 30px;
+    height: 30px;
+    background: #1a1a1a;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.85rem;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.3s ease;
+}
+
+.hiw-steps {
+    counter-reset: step-counter;
+}
+
+.hiw-step-card:hover::after {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+@keyframes cardEntry {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Connector lines for desktop */
+.hiw-steps {
+    position: relative;
+}
+
+@media (max-width: 1024px) {
+    .hiw-steps {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 640px) {
+    .how-it-works {
+        padding: 3rem 1rem;
+        margin-top: 3rem;
+    }
+
+    .hiw-title {
+        font-size: 1.75rem;
+        margin-bottom: 2.5rem;
+    }
+
+    .hiw-steps {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+    }
+
+    .hiw-step-card {
+        flex-direction: row;
+        padding: 1.25rem;
+        text-align: left;
+        align-items: flex-start;
+        gap: 1.25rem;
+    }
+
+    .hiw-icon-wrapper {
+        width: 56px;
+        height: 56px;
+        margin-bottom: 0;
+        flex-shrink: 0;
+    }
+
+    .hiw-icon {
+        font-size: 1.5rem;
+    }
+
+    .hiw-step-card::after {
+        top: auto;
+        bottom: -10px;
+        right: 10px;
+    }
+}
