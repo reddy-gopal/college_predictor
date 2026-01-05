@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { predictCollegeApi } from '../api/predictionapi';
+import { predictCollegeApi } from '../api/predictionApi';
 import { getExamsApi } from '../api/examsApi';
 import { getCategoriesApi } from '../api/categoriesApi';
 import './Form.css';
