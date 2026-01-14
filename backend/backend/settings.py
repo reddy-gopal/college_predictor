@@ -37,9 +37,12 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'predictor',
     'rest_framework',
     'corsheaders',
+    'accounts',
+    'predictor',
+    'mocktest',
+    'scholarships',
 ]
 
 MIDDLEWARE = [
@@ -53,7 +56,10 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+# CORS Configuration for development
+# Since we're not using credentials (withCredentials: false), we can use wildcard
 CORS_ALLOW_ALL_ORIGINS = True
+# CORS_ALLOW_CREDENTIALS = True  # Not needed since we're not using credentials
 
 ROOT_URLCONF = 'backend.urls'
 
@@ -127,3 +133,6 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Custom User Model
+AUTH_USER_MODEL = 'accounts.CustomUser'

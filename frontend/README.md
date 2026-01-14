@@ -1,156 +1,155 @@
-# College Predictor - Frontend
+# College Predictor Frontend
 
-A modern React application for predicting college admissions and rank estimation based on exam scores. This frontend provides an intuitive interface with tab-based navigation for two main features: **Predict College** and **Predict Rank**.
+A modern, production-ready Next.js frontend for the College Predictor platform.
 
 ## Features
 
-### 🎓 Predict College
-- Predict colleges based on rank, exam, category, and optional state filter
-- View detailed results including college name, course, branch, degree, and location
-- Filter results by state (optional)
-
-### 📊 Predict Rank
-- Estimate rank from exam score or percentile
-- Support for multiple exam types and categories
-- Weighted rank prediction using Inverse Distance Weighting (IDW) algorithm
-- Displays rank range and estimated rank
+- 🎯 **Mock Tests** - Comprehensive mock test platform with real-time scoring
+- 🎓 **College Predictor** - Find eligible colleges based on rank and category
+- 📊 **Rank Predictor** - Estimate your rank from scores or percentiles
+- 💰 **Scholarships** - Coming soon placeholder
+- 📱 **Mobile-First** - Fully responsive design
+- 🎨 **Modern UI** - Clean, engaging, student-friendly interface
 
 ## Tech Stack
 
-- **React 19.2.0** - UI library
-- **Vite 7.2.4** - Build tool and dev server
-- **React Hook Form 7.69.0** - Form management
-- **Axios 1.13.2** - HTTP client
-- **CSS3** - Styling with animations
+- **Next.js 14** (App Router)
+- **React 19**
+- **Tailwind CSS**
+- **Axios** for API calls
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 18+ 
+- npm or yarn
+- Backend Django server running on `http://127.0.0.1:8000`
+
+### Installation
+
+1. **Install dependencies:**
+```bash
+npm install
+   # or
+   yarn install
+```
+
+2. **Configure environment variables:**
+   ```bash
+   cp .env.example .env.local
+   ```
+   Edit `.env.local` and set your API URL if different from default.
+
+3. **Run development server:**
+```bash
+npm run dev
+   # or
+   yarn dev
+   ```
+
+4. **Open your browser:**
+   Navigate to [http://localhost:3000](http://localhost:3000)
 
 ## Project Structure
 
 ```
 frontend/
 ├── src/
-│   ├── api/                    # API client and endpoints
-│   │   ├── apiClient.js        # Axios instance configuration
-│   │   ├── examsApi.js         # Fetch available exams
-│   │   ├── getRankFromScoreApi.js  # Rank prediction API
-│   │   └── predictionApi.js    # College prediction API
-│   ├── components/             # React components
-│   │   ├── Navbar.jsx          # Top navigation bar
-│   │   ├── Tabs.jsx            # Tab switching component
-│   │   ├── PredictCollegeForm.jsx  # College prediction form
-│   │   ├── PredictRank.jsx     # Rank prediction form
-│   │   ├── Form.css            # Form styling
-│   │   ├── Navbar.css          # Navbar styling
-│   │   └── Tabs.css            # Tabs styling
-│   ├── App.jsx                 # Main application component
-│   ├── App.css                 # Application styles
-│   ├── index.css               # Global styles
-│   └── main.jsx               # Application entry point
-└── package.json               # Dependencies and scripts
+│   ├── app/                    # Next.js App Router pages
+│   │   ├── layout.jsx          # Root layout
+│   │   ├── page.jsx            # Home page
+│   │   ├── mock-tests/         # Mock test pages
+│   │   ├── predict-college/    # College predictor
+│   │   ├── predict-rank/       # Rank predictor
+│   │   └── scholarships/       # Scholarships placeholder
+│   ├── components/             # Reusable components
+│   │   ├── layout/            # Layout components (Navbar, Footer)
+│   │   └── ...                # Other components
+│   └── lib/                    # Utilities
+│       └── api.js              # API client
+├── public/                     # Static assets
+├── next.config.js              # Next.js configuration
+├── tailwind.config.js          # Tailwind CSS configuration
+└── package.json
 ```
 
-## Getting Started
+## API Integration
 
-### Prerequisites
+The frontend connects to Django REST Framework APIs:
 
-- Node.js (v16 or higher)
-- npm or yarn
+- **Mock Tests**: `/mocktest/mock-tests/`
+- **College Predictor**: `/predict-college/`
+- **Rank Predictor**: `/get-rank-from-score/`
 
-### Installation
+API configuration is in `src/lib/api.js` and uses the base URL from environment variables.
 
-1. Install dependencies:
-```bash
-npm install
-```
+## Color Palette
 
-2. Start the development server:
-```bash
-npm run dev
-```
+- **Primary**: Indigo Velvet (#3d348b)
+- **Secondary**: Medium Slate Blue (#7678ed)
+- **Accent 1**: Amber Flame (#f7b801)
+- **Accent 2**: Tiger Orange (#f18701)
+- **Accent 3**: Cayenne Red (#f35b04)
 
-3. Open your browser and navigate to `http://localhost:5173`
+## Available Scripts
 
-### Build for Production
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run start` - Start production server
+- `npm run lint` - Run ESLint
+
+## Building for Production
 
 ```bash
 npm run build
+npm run start
 ```
 
-The built files will be in the `dist/` directory.
+## Features Overview
 
-### Preview Production Build
+### Home Page
+- Hero section with CTAs
+- Feature cards
+- Benefits section
+- Call-to-action banner
 
-```bash
-npm run preview
-```
+### Mock Tests
+- Test listing page
+- Test attempt page with timer
+- Question navigation
+- Results page with detailed analysis
 
-## Usage
+### College Predictor
+- Form-based input
+- Real-time college matching
+- Filterable results
+- College cards with details
 
-### Predict College
+### Rank Predictor
+- Score/Percentile input
+- Rank range prediction
+- Confidence indicators
+- Visual feedback
 
-1. Select the **Predict College** tab
-2. Enter your rank
-3. Select the exam type
-4. Choose your category (General, SC, ST, OBC)
-5. Optionally select a state
-6. Click **Predict Colleges**
-7. View the list of matching colleges with course details
+## Notes
 
-### Predict Rank
+- The frontend is configured to proxy API requests through Next.js rewrites (see `next.config.js`)
+- All pages are server-side rendered where possible for better performance
+- Client components are used only where interactivity is required
+- The design is mobile-first and fully responsive
 
-1. Select the **Predict Rank** tab
-2. Select the exam type
-3. Choose your category
-4. Enter the year
-5. Select input type (Score or Percentile)
-6. Enter your score or percentile value
-7. Click **Get Rank from Score**
-8. View the estimated rank range and predicted rank
+## Troubleshooting
 
-## API Endpoints
+### API Connection Issues
+- Ensure the Django backend is running on `http://127.0.0.1:8000`
+- Check CORS settings in Django if accessing from different origin
+- Verify API endpoints match the backend routes
 
-The frontend communicates with the backend API at `http://127.0.0.1:8000`:
-
-- `GET /exams/` - Fetch all available exams
-- `POST /predict-college/` - Predict colleges based on rank
-- `POST /get-rank-from-score/` - Estimate rank from score/percentile
-
-## Features & Design
-
-### UI/UX
-- **Clean white background** with black text for optimal readability
-- **Smooth animations** for tab switching and form interactions
-- **Responsive design** with modern styling
-- **User-friendly error messages** with clear feedback
-
-### Form Validation
-- Required field validation
-- Input type validation (numbers for scores/ranks)
-- Real-time error messages
-
-### State Management
-- Separate state for each tab's results
-- Form state managed by React Hook Form
-- Loading states for async operations
-
-## Development
-
-### Available Scripts
-
-- `npm run dev` - Start development server with HMR
-- `npm run build` - Build for production
-- `npm run preview` - Preview production build
-- `npm run lint` - Run ESLint
-
-### Code Style
-
-- ESLint configuration for code quality
-- React Hooks best practices
-- Component-based architecture
-
-## Backend Integration
-
-Make sure the Django backend is running on `http://127.0.0.1:8000` before using the application. The API client is configured in `src/api/apiClient.js`.
+### Build Issues
+- Clear `.next` folder and rebuild: `rm -rf .next && npm run build`
+- Check Node.js version (requires 18+)
 
 ## License
 
-This project is part of the College Predictor application.
+This project is part of the College Predictor platform.
