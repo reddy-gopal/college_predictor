@@ -96,19 +96,22 @@ class DifficultyLevel(models.Model):
         return self.get_level_display()
 
 
-class TestCategory(models.Model):
+class Exam(models.Model):
     """
-    Categories for mock tests (Full Length, Practice, etc.)
+    Exam model for organizing tests and questions by exam type.
     """
-    name = models.CharField(
+    code = models.CharField(
         max_length=50,
         unique=True,
         db_index=True,
-        verbose_name='Category Name'
+        verbose_name='Exam Code',
+        help_text='Unique code for the exam (e.g., jee_main, neet)'
     )
-    description = models.TextField(
-        blank=True,
-        verbose_name='Description'
+    name = models.CharField(
+        max_length=100,
+        db_index=True,
+        verbose_name='Exam Name',
+        help_text='Display name (e.g., JEE Main, NEET)'
     )
     is_active = models.BooleanField(
         default=True,
@@ -125,8 +128,8 @@ class TestCategory(models.Model):
     )
 
     class Meta:
-        verbose_name = 'Test Category'
-        verbose_name_plural = 'Test Categories'
+        verbose_name = 'Exam'
+        verbose_name_plural = 'Exams'
         ordering = ['name']
 
     def __str__(self):
@@ -141,6 +144,7 @@ class MockTest(models.Model):
         FULL_LENGTH = 'full_length', 'Full Length'
         PRACTICE = 'practice', 'Practice'
         SECTIONAL = 'sectional', 'Sectional'
+        CUSTOM = 'custom', 'Custom'
         TOPIC_WISE = 'topic_wise', 'Topic Wise'
 
     title = models.CharField(
@@ -148,12 +152,15 @@ class MockTest(models.Model):
         db_index=True,
         verbose_name='Test Title'
     )
-    category = models.ForeignKey(
-        TestCategory,
+    exam = models.ForeignKey(
+        Exam,
         on_delete=models.PROTECT,
         related_name='mock_tests',
         db_index=True,
-        verbose_name='Category'
+        null=True,
+        blank=True,
+        verbose_name='Exam',
+        help_text='Exam this test belongs to'
     )
     test_type = models.CharField(
         max_length=30,
@@ -221,8 +228,8 @@ class MockTest(models.Model):
         verbose_name_plural = 'Mock Tests'
         ordering = ['-created_at', 'title']
         indexes = [
-            models.Index(fields=['category', 'test_type', 'is_active']),
             models.Index(fields=['is_vip', 'is_active']),
+            models.Index(fields=['exam', 'test_type', 'is_active']),
         ]
 
     def save(self, *args, **kwargs):
@@ -249,7 +256,10 @@ class Question(models.Model):
         on_delete=models.CASCADE,
         related_name='questions',
         db_index=True,
-        verbose_name='Mock Test'
+        null=True,
+        blank=True,
+        verbose_name='Mock Test',
+        help_text='Mock test this question belongs to (null for standalone questions in question bank)'
     )
     question_number = models.PositiveIntegerField(
         db_index=True,
@@ -270,6 +280,23 @@ class Question(models.Model):
         max_length=50,
         db_index=True,
         verbose_name='Subject'
+    )
+    exam = models.ForeignKey(
+        Exam,
+        on_delete=models.PROTECT,
+        related_name='questions',
+        db_index=True,
+        null=True,
+        blank=True,
+        verbose_name='Exam',
+        help_text='Exam this question belongs to (required for new questions)'
+    )
+    year = models.PositiveIntegerField(
+        db_index=True,
+        blank=True,
+        null=True,
+        verbose_name='Year',
+        help_text='Year of the question (e.g., 2021, 2022, 2023)'
     )
     option_a = models.CharField(
         max_length=500,
@@ -342,6 +369,8 @@ class Question(models.Model):
             models.Index(fields=['mock_test', 'question_number']),
             models.Index(fields=['subject', 'difficulty_level']),
             models.Index(fields=['topic', 'subject']),
+            models.Index(fields=['exam', 'year']),
+            models.Index(fields=['exam', 'year', 'subject']),
         ]
         constraints = [
             models.UniqueConstraint(
@@ -351,7 +380,8 @@ class Question(models.Model):
         ]
 
     def __str__(self):
-        return f"Q{self.question_number} - {self.subject} ({self.mock_test.title})"
+        test_title = self.mock_test.title if self.mock_test else "Standalone"
+        return f"Q{self.question_number} - {self.subject} ({test_title})"
 
 
 class StudentProfile(models.Model):
@@ -390,6 +420,25 @@ class StudentProfile(models.Model):
         choices=ExamTarget.choices,
         db_index=True,
         verbose_name='Exam Target'
+    )
+    target_rank = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name='Target Rank',
+        help_text='User\'s target rank/score goal'
+    )
+    tests_per_week = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        verbose_name='Tests Per Week',
+        help_text='User\'s preferred test frequency (e.g., "1-2 tests", "3-5 tests", "Daily practice")'
+    )
+    onboarding_completed = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name='Onboarding Completed',
+        help_text='Whether user has completed the onboarding process'
     )
     total_xp = models.PositiveIntegerField(
         default=0,
@@ -480,6 +529,20 @@ class TestAttempt(models.Model):
     time_taken_seconds = models.PositiveIntegerField(
         default=0,
         verbose_name='Time Taken (Seconds)'
+    )
+    test_mode = models.CharField(
+        max_length=20,
+        choices=[('preset', 'Preset'), ('custom', 'Custom')],
+        default='preset',
+        db_index=True,
+        verbose_name='Test Mode',
+        help_text='Whether this is a preset test or custom generated test'
+    )
+    generation_config = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name='Generation Config',
+        help_text='Configuration used to generate custom tests (exam, years, subjects, etc.)'
     )
     created_at = models.DateTimeField(
         default=timezone.now,
@@ -839,3 +902,68 @@ class Leaderboard(models.Model):
 
     def __str__(self):
         return f"{self.student.user.email} - {self.get_leaderboard_type_display()} Rank {self.rank}"
+
+
+class DailyFocus(models.Model):
+    """
+    Daily attendance/focus tracking for students.
+    Marks a student as "Present" when they complete meaningful study activities.
+    """
+    class Status(models.TextChoices):
+        PRESENT = 'present', 'Present'
+        PARTIAL = 'partial', 'Partial'
+    
+    class Source(models.TextChoices):
+        MOCK_TEST = 'mock_test', 'Mock Test'
+        CUSTOM_TEST = 'custom_test', 'Custom Test'
+        MISTAKE_REVIEW = 'mistake_review', 'Mistake Review'
+    
+    student = models.ForeignKey(
+        StudentProfile,
+        on_delete=models.CASCADE,
+        related_name='daily_focus_records',
+        db_index=True,
+        verbose_name='Student'
+    )
+    date = models.DateField(
+        db_index=True,
+        verbose_name='Date',
+        help_text='Date for this focus record'
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PRESENT,
+        db_index=True,
+        verbose_name='Status'
+    )
+    source = models.CharField(
+        max_length=30,
+        choices=Source.choices,
+        db_index=True,
+        verbose_name='Source',
+        help_text='What activity marked this day as present'
+    )
+    created_at = models.DateTimeField(
+        default=timezone.now,
+        verbose_name='Created At'
+    )
+    
+    class Meta:
+        verbose_name = 'Daily Focus'
+        verbose_name_plural = 'Daily Focus Records'
+        ordering = ['-date']
+        indexes = [
+            models.Index(fields=['student', '-date']),
+            models.Index(fields=['student', 'date']),
+            models.Index(fields=['date', 'status']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['student', 'date'],
+                name='unique_daily_focus_per_student'
+            )
+        ]
+    
+    def __str__(self):
+        return f"{self.student.user.email} - {self.date} ({self.get_status_display()})"

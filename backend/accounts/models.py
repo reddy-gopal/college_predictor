@@ -99,6 +99,32 @@ class CustomUser(AbstractUser):
         blank=True,
         verbose_name='Google Picture URL'
     )
+    is_google_user = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name='Google User'
+    )
+
+    # Additional profile fields
+    class_level = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        verbose_name='Class Level'
+    )
+    exam_target = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        verbose_name='Exam Target'
+    )
+    preferred_branches = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        verbose_name='Preferred Branches',
+        help_text='Comma-separated list of preferred branches'
+    )
 
     # Override groups and user_permissions to avoid reverse accessor clash
     groups = models.ManyToManyField(
@@ -119,7 +145,7 @@ class CustomUser(AbstractUser):
     )
 
     USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = []  # Email is the only required field
+    REQUIRED_FIELDS = []  
     
     objects = CustomUserManager()
 

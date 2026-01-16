@@ -1,43 +1,56 @@
 'use client';
 
 import { getXPProgress } from '@/lib/gamification';
+import { useEffect, useState } from 'react';
 
-export default function ProgressSnapshot({ stats, activity }) {
-  const recentTests = activity?.recentTests || [];
-  const latestTest = recentTests[0];
+export default function ProgressSnapshot({ stats, activity, user }) {
+  const [recentTests, setRecentTests] = useState(activity?.recentTests || []);
+  
+  // Update when activity changes (real-time updates)
+  useEffect(() => {
+    if (activity?.recentTests) {
+      setRecentTests(activity.recentTests);
+    }
+  }, [activity?.recentTests]);
+
+  const latestTest = recentTests.length > 0 ? recentTests[0] : null;
   const bestPercentile = recentTests.length > 0
     ? Math.max(...recentTests.map((t) => t.percentile || 0))
     : null;
 
   // Simple rank category logic (can be enhanced)
   const getRankCategory = () => {
-    if (!latestTest || !stats?.goalRank) return 'N/A';
-    const score = latestTest.score || 0;
-    const goal = stats.goalRank || 0;
+    if (!latestTest || !user?.target_rank) return null;
+    const score = latestTest.score;
+    const goal = user.target_rank;
     if (score >= goal * 0.9) return 'Safe';
     if (score >= goal * 0.7) return 'Target';
     return 'Dream';
   };
 
+  const rankCategory = getRankCategory();
   const xpProgress = getXPProgress(stats?.xpTotal || 0);
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    <>
+      {/* Row 1: Latest Score & Best Percentile */}
       <SnapshotCard
         label="Latest Score"
-        value={latestTest?.score?.toFixed(1) || 'N/A'}
+        value={latestTest ? latestTest.score.toFixed(1) : '—'}
         icon="📊"
         color="primary"
       />
       <SnapshotCard
         label="Best Percentile"
-        value={bestPercentile ? `${bestPercentile.toFixed(1)}%` : 'N/A'}
+        value={bestPercentile ? `${bestPercentile.toFixed(1)}%` : '—'}
         icon="🏆"
         color="secondary"
       />
+      
+      {/* Row 2: Rank Category & XP */}
       <SnapshotCard
         label="Rank Category"
-        value={getRankCategory()}
+        value={rankCategory || '—'}
         icon="🎯"
         color="accent-1"
       />
@@ -58,7 +71,7 @@ export default function ProgressSnapshot({ stats, activity }) {
           Level {xpProgress.level}
         </div>
       </div>
-    </div>
+    </>
   );
 }
 

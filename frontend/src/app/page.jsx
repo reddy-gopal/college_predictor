@@ -1,44 +1,44 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { getUserProfile, getUserStats, getActivity, initializeUserData } from '@/lib/gamification';
 import PublicHome from '@/components/home/PublicHome';
 import NewUserHome from '@/components/home/NewUserHome';
 import DashboardHome from '@/components/home/DashboardHome';
+import { mockTestApi } from '@/lib/api';
+import { useEffect, useState } from 'react';
 
 export default function HomePage() {
   const { user, loading: authLoading } = useAuth();
-  const [profile, setProfile] = useState(null);
-  const [stats, setStats] = useState(null);
-  const [activity, setActivity] = useState(null);
-  const [pageLoading, setPageLoading] = useState(true);
+  const [testAttempts, setTestAttempts] = useState([]);
+  const [loading, setLoading] = useState(true);
 
+  // Fetch test attempts from backend
   useEffect(() => {
-    if (authLoading) return;
-
-    if (user) {
-      // Load user data from localStorage
-      const userProfile = getUserProfile();
-      const userStats = getUserStats();
-      const userActivity = getActivity();
-
-      // If profile exists but stats don't, initialize
-      if (userProfile && !userStats) {
-        const newStats = initializeUserData(userProfile);
-        setStats(newStats);
-      } else {
-        setStats(userStats);
+    const fetchTestAttempts = async () => {
+      if (!user) {
+        setLoading(false);
+        return;
       }
 
-      setProfile(userProfile);
-      setActivity(userActivity);
-    }
+      try {
+        const response = await mockTestApi.getAll({});
+        // Get user's test attempts
+        // Note: This might need to be filtered by user on backend
+        setTestAttempts(response.data?.results || response.data || []);
+      } catch (error) {
+        console.error('Error fetching test attempts:', error);
+        setTestAttempts([]);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    setPageLoading(false);
+    if (!authLoading) {
+      fetchTestAttempts();
+    }
   }, [user, authLoading]);
 
-  if (pageLoading || authLoading) {
+  if (loading || authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
@@ -51,9 +51,8 @@ export default function HomePage() {
     return <PublicHome />;
   }
 
-  // Logged in but no tests - show new user home
-  const recentTests = activity?.recentTests || [];
-  if (recentTests.length === 0) {
+  // Logged in but no tests or incomplete onboarding - show new user home
+  if (testAttempts.length === 0 || !user.onboarding_completed) {
     return <NewUserHome />;
   }
 

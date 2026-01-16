@@ -1,11 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
-import { initializeUserData } from '@/lib/gamification';
-import { mockTestApi } from '@/lib/api';
+import { mockTestApi, authApi } from '@/lib/api';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -20,14 +19,124 @@ export default function RegisterPage() {
     preferred_branches: [],
   });
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState(null);
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
+  const googleInitialized = useRef(false);
+  const buttonContainerRef = useRef(null);
 
   useEffect(() => {
     if (prefillPhone) {
       setFormData((prev) => ({ ...prev, phone: prefillPhone }));
     }
   }, [prefillPhone]);
+
+  const handleGoogleResponse = useCallback(async (response) => {
+    setError(null);
+    setGoogleLoading(true);
+
+    try {
+      // Send credential to backend
+      const result = await authApi.googleLogin(response.credential);
+      
+      const { user, token, refresh, is_new_user } = result.data;
+
+      // Save to AuthContext with token
+      await loginWithGoogle(user, token);
+
+      // Redirect based on whether user is new
+      if (is_new_user) {
+        router.push('/onboarding-preferences');
+      } else {
+        router.push('/');
+      }
+    } catch (err) {
+      console.error('Google login error:', err);
+      setError(
+        err.response?.data?.detail || 
+        'Failed to sign in with Google. Please try again.'
+      );
+      setGoogleLoading(false);
+    }
+  }, [loginWithGoogle, router]);
+
+  useEffect(() => {
+    // Initialize Google Sign-In when component mounts and SDK is loaded
+    const initGoogleSignIn = () => {
+      if (typeof window === 'undefined' || !window.google || !window.google.accounts) {
+        return;
+      }
+
+      // Check if accounts.id is available
+      if (!window.google.accounts.id) {
+        console.log('Google accounts.id not available yet, waiting...');
+        return;
+      }
+
+      const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+      if (!clientId) {
+        console.error('NEXT_PUBLIC_GOOGLE_CLIENT_ID is not set');
+        return;
+      }
+
+      if (googleInitialized.current) {
+        return;
+      }
+
+      try {
+        // Initialize Google Identity Services
+        window.google.accounts.id.initialize({
+          client_id: clientId,
+          callback: handleGoogleResponse,
+        });
+
+        // Render the button using ref or getElementById
+        const buttonContainer = buttonContainerRef.current || document.getElementById('google-signin-button-register');
+        if (buttonContainer && !buttonContainer.hasChildNodes()) {
+          // Only render if container is empty to avoid conflicts
+          window.google.accounts.id.renderButton(buttonContainer, {
+            theme: 'outline',
+            size: 'large',
+            width: '100%',
+            type: 'standard',
+            text: 'signup_with',
+          });
+        }
+
+        googleInitialized.current = true;
+      } catch (error) {
+        console.error('Error initializing Google Sign-In:', error);
+      }
+    };
+
+    // Check if Google SDK is already loaded
+    if (window.google && window.google.accounts) {
+      // Give it a small delay to ensure accounts.id is available
+      setTimeout(() => {
+        initGoogleSignIn();
+      }, 100);
+    } else {
+      // Wait for SDK to load
+      const checkGoogleSDK = setInterval(() => {
+        if (window.google && window.google.accounts) {
+          clearInterval(checkGoogleSDK);
+          // Give it a small delay to ensure accounts.id is available
+          setTimeout(() => {
+            initGoogleSignIn();
+          }, 100);
+        }
+      }, 100);
+
+      // Cleanup interval after 10 seconds
+      setTimeout(() => clearInterval(checkGoogleSDK), 10000);
+      
+      // Cleanup on unmount
+      return () => {
+        clearInterval(checkGoogleSDK);
+        // Don't try to remove Google's button - let it handle its own cleanup
+      };
+    }
+  }, [handleGoogleResponse]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -51,18 +160,8 @@ export default function RegisterPage() {
 
     try {
       // TODO: Call registration API
-      // const response = await mockTestApi.register(formData);
-      // For now, simulate registration
-      const userData = {
-        ...formData,
-        id: Date.now(), // Temporary ID
-        created_at: new Date().toISOString(),
-      };
-      login(userData);
-      
-      // Initialize gamification data
-      initializeUserData(userData);
-      
+      // For now, redirect to onboarding since registration API is not implemented
+      // The user will complete onboarding which will create their profile
       router.push('/onboarding-preferences');
     } catch (err) {
       setError(
@@ -215,7 +314,7 @@ export default function RegisterPage() {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || googleLoading}
               className="btn-primary w-full text-lg py-4"
             >
               {loading ? 'Creating Account...' : 'Create Account'}
@@ -225,8 +324,27 @@ export default function RegisterPage() {
               By creating an account, you agree to our Terms of Service and
               Privacy Policy
             </p>
+          </form>
 
-            <div className="text-center">
+          <div className="my-6 flex items-center">
+            <div className="flex-1 border-t border-gray-300"></div>
+            <span className="px-4 text-sm text-gray-500">or</span>
+            <div className="flex-1 border-t border-gray-300"></div>
+          </div>
+
+          <div 
+            id="google-signin-button-register" 
+            ref={buttonContainerRef}
+            className="w-full min-h-[40px]"
+          ></div>
+          {googleLoading && (
+            <div className="w-full border-2 border-gray-300 rounded-lg px-6 py-3 font-semibold text-gray-700 bg-gray-50 flex items-center justify-center gap-3 mt-4">
+              <div className="w-5 h-5 border-2 border-gray-300 border-t-gray-700 rounded-full animate-spin"></div>
+              <span>Signing up...</span>
+            </div>
+          )}
+
+          <div className="text-center mt-6">
               <p className="text-sm text-gray-600">
                 Already have an account?{' '}
                 <Link
@@ -237,7 +355,6 @@ export default function RegisterPage() {
                 </Link>
               </p>
             </div>
-          </form>
         </div>
       </div>
     </div>

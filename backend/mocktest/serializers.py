@@ -11,10 +11,26 @@ Design Decisions:
 from rest_framework import serializers
 from django.conf import settings
 from .models import (
-    PhoneOTP, DifficultyLevel, TestCategory, MockTest, Question,
+    PhoneOTP, Exam, DifficultyLevel, MockTest, Question,
     StudentProfile, TestAttempt, StudentAnswer, MistakeNotebook,
-    StudyGuild, XPLog, Leaderboard
+    StudyGuild, XPLog, Leaderboard, DailyFocus
 )
+
+
+class ExamSerializer(serializers.ModelSerializer):
+    """Serializer for Exam."""
+    
+    class Meta:
+        model = Exam
+        fields = [
+            'id',
+            'code',
+            'name',
+            'is_active',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
 
 
 class DifficultyLevelSerializer(serializers.ModelSerializer):
@@ -36,31 +52,10 @@ class DifficultyLevelSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at']
 
 
-class TestCategorySerializer(serializers.ModelSerializer):
-    """Serializer for TestCategory."""
-    tests_count = serializers.IntegerField(
-        source='mock_tests.count',
-        read_only=True
-    )
-    
-    class Meta:
-        model = TestCategory
-        fields = [
-            'id',
-            'name',
-            'description',
-            'is_active',
-            'tests_count',
-            'created_at',
-            'updated_at',
-        ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'tests_count']
-
-
 class MockTestListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for MockTest list views."""
-    category_name = serializers.CharField(
-        source='category.name',
+    exam_name = serializers.CharField(
+        source='exam.name',
         read_only=True
     )
     test_type_display = serializers.CharField(
@@ -81,8 +76,8 @@ class MockTestListSerializer(serializers.ModelSerializer):
         fields = [
             'id',
             'title',
-            'category',
-            'category_name',
+            'exam',
+            'exam_name',
             'test_type',
             'test_type_display',
             'total_questions',
@@ -99,12 +94,6 @@ class MockTestListSerializer(serializers.ModelSerializer):
 
 class MockTestDetailSerializer(serializers.ModelSerializer):
     """Detailed serializer for MockTest."""
-    category = TestCategorySerializer(read_only=True)
-    category_id = serializers.PrimaryKeyRelatedField(
-        queryset=TestCategory.objects.all(),
-        source='category',
-        write_only=True
-    )
     difficulty = DifficultyLevelSerializer(read_only=True)
     difficulty_id = serializers.PrimaryKeyRelatedField(
         queryset=DifficultyLevel.objects.all(),
@@ -112,6 +101,11 @@ class MockTestDetailSerializer(serializers.ModelSerializer):
         write_only=True,
         allow_null=True
     )
+    exam_name = serializers.SerializerMethodField()
+    
+    def get_exam_name(self, obj):
+        """Get exam name, return None if exam is not set."""
+        return obj.exam.name if obj.exam else None
     test_type_display = serializers.CharField(
         source='get_test_type_display',
         read_only=True
@@ -126,8 +120,8 @@ class MockTestDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id',
             'title',
-            'category',
-            'category_id',
+            'exam',
+            'exam_name',
             'test_type',
             'test_type_display',
             'total_questions',
@@ -466,10 +460,53 @@ class MistakeNotebookSerializer(serializers.ModelSerializer):
         source='question.text',
         read_only=True
     )
+    question_number = serializers.IntegerField(
+        source='question.question_number',
+        read_only=True
+    )
+    question_subject = serializers.CharField(
+        source='question.subject',
+        read_only=True
+    )
+    question_chapter = serializers.CharField(
+        source='question.chapter',
+        read_only=True
+    )
+    question_correct_option = serializers.CharField(
+        source='question.correct_option',
+        read_only=True
+    )
+    question_option_a = serializers.CharField(
+        source='question.option_a',
+        read_only=True
+    )
+    question_option_b = serializers.CharField(
+        source='question.option_b',
+        read_only=True
+    )
+    question_option_c = serializers.CharField(
+        source='question.option_c',
+        read_only=True
+    )
+    question_option_d = serializers.CharField(
+        source='question.option_d',
+        read_only=True
+    )
+    question_explanation = serializers.CharField(
+        source='question.explanation',
+        read_only=True
+    )
+    test_title = serializers.SerializerMethodField()
     error_type_display = serializers.CharField(
         source='get_error_type_display',
         read_only=True
     )
+    
+    def get_test_title(self, obj):
+        """Safely get test title, handling None attempt."""
+        if obj.attempt and obj.attempt.mock_test:
+            return obj.attempt.mock_test.title
+        return None
     
     class Meta:
         model = MistakeNotebook
@@ -479,7 +516,17 @@ class MistakeNotebookSerializer(serializers.ModelSerializer):
             'student_email',
             'question',
             'question_text',
+            'question_number',
+            'question_subject',
+            'question_chapter',
+            'question_correct_option',
+            'question_option_a',
+            'question_option_b',
+            'question_option_c',
+            'question_option_d',
+            'question_explanation',
             'attempt',
+            'test_title',
             'error_type',
             'error_type_display',
             'notes',
@@ -571,4 +618,35 @@ class LeaderboardSerializer(serializers.ModelSerializer):
             'updated_at',
         ]
         read_only_fields = fields
+
+
+class DailyFocusSerializer(serializers.ModelSerializer):
+    """Serializer for DailyFocus."""
+    student_email = serializers.EmailField(
+        source='student.user.email',
+        read_only=True
+    )
+    status_display = serializers.CharField(
+        source='get_status_display',
+        read_only=True
+    )
+    source_display = serializers.CharField(
+        source='get_source_display',
+        read_only=True
+    )
+    
+    class Meta:
+        model = DailyFocus
+        fields = [
+            'id',
+            'student',
+            'student_email',
+            'date',
+            'status',
+            'status_display',
+            'source',
+            'source_display',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'student', 'created_at']
 

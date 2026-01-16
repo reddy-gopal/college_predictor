@@ -83,8 +83,39 @@ export default function MockTestResultsPage() {
         dateISO,
       });
 
-      // Award XP for test completion
-      awardXP('test_completed', 50);
+      // Award XP for test completion based on test type
+      const testMode = attemptData.test_mode || 'preset';
+      const testType = mockTest?.test_type || 'practice';
+      const generationConfig = attemptData.generation_config || {};
+      
+      let baseXP = 50; // Default for preset tests
+      
+      if (testMode === 'custom') {
+        // Custom test XP based on test type
+        switch (testType) {
+          case 'practice':
+            baseXP = 40;
+            break;
+          case 'sectional':
+            baseXP = 50;
+            break;
+          case 'full_length':
+            baseXP = 80;
+            break;
+          case 'custom':
+            baseXP = 50; // Base for custom type
+            break;
+          default:
+            baseXP = 50;
+        }
+        
+        // PYQ bonus (if years are specified in generation config)
+        if (generationConfig.years && generationConfig.years.length > 0) {
+          baseXP += 20;
+        }
+      }
+      
+      awardXP('test_completed', baseXP);
 
       // Check for improvement bonus
       const previousTests = activity.recentTests || [];

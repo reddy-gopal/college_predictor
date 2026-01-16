@@ -10,26 +10,26 @@ const api = axios.create({
   // withCredentials removed - not using session-based auth, using default user workaround
 });
 
+// Token storage in memory (module-level variable)
+let authToken = null;
+
+// Function to set token (called from AuthContext)
+export const setAuthToken = (token) => {
+  authToken = token;
+};
+
+// Function to get token
+export const getAuthToken = () => {
+  return authToken;
+};
+
 // Add request interceptor to include auth token if available
 api.interceptors.request.use(
   (config) => {
-    // Try to get auth token from localStorage
-    if (typeof window !== 'undefined') {
-      const user = localStorage.getItem('user');
-      if (user) {
-        try {
-          const userData = JSON.parse(user);
-          // If using token-based auth, add token to headers
-          if (userData.token) {
-            config.headers.Authorization = `Token ${userData.token}`;
-          } else if (userData.access_token) {
-            config.headers.Authorization = `Bearer ${userData.access_token}`;
-          }
-          // For session-based auth, withCredentials is already set
-        } catch (error) {
-          console.error('Error parsing user data:', error);
-        }
-      }
+    // Get token from memory (set by AuthContext)
+    if (authToken) {
+      // Always use Bearer format for JWT tokens
+      config.headers.Authorization = `Bearer ${authToken}`;
     }
     return config;
   },
@@ -43,16 +43,11 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401 || error.response?.status === 403) {
-      // Clear user data and redirect to login
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('user');
-        localStorage.removeItem('userProfile');
-        localStorage.removeItem('userStats');
-        localStorage.removeItem('activity');
-        // Redirect to login if not already there
-        if (!window.location.pathname.includes('/login')) {
-          window.location.href = '/login';
-        }
+      // Clear token from memory
+      authToken = null;
+      // Redirect to login if not already there
+      if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+        window.location.href = '/login';
       }
     }
     return Promise.reject(error);
@@ -61,14 +56,28 @@ api.interceptors.response.use(
 
 // Mock Test APIs
 export const mockTestApi = {
-  getAll: () => api.get('/mocktest/mock-tests/'),
+  getExams: () => api.get('/mocktest/exams/'),
+  getAll: (params) => api.get('/mocktest/mock-tests/', { params }),
   getById: (id) => api.get(`/mocktest/mock-tests/${id}/`),
   getQuestions: (testId) => api.get(`/mocktest/mock-tests/${testId}/questions/`),
   createAttempt: (data) => api.post('/mocktest/test-attempts/', data),
   getAttempt: (id) => api.get(`/mocktest/test-attempts/${id}/`),
+  getUserAttempts: (params) => api.get('/mocktest/test-attempts/', { params }),
   submitAnswer: (attemptId, data) => api.post(`/mocktest/test-attempts/${attemptId}/submit_answer/`, data),
   submitTest: (attemptId) => api.post(`/mocktest/test-attempts/${attemptId}/submit/`),
   getAttemptAnswers: (attemptId) => api.get(`/mocktest/test-attempts/${attemptId}/answers/`),
+  getExamYears: (examId) => api.get(`/mocktest/exam-years/?exam_id=${examId}`),
+  getAvailableQuestionsCount: (params) => api.get('/mocktest/available-questions-count/', { params }),
+  generateTest: (data) => api.post('/mocktest/generate-test/', data),
+  generateCustomTest: (data) => api.post('/mocktest/custom-test/generate/', data),
+  getMistakes: (params) => api.get('/mocktest/mistake-notebook/', { params }),
+  updateMistake: (id, data) => api.patch(`/mocktest/mistake-notebook/${id}/`, data),
+  generateTestFromMistakes: (data) => api.post('/mocktest/mistake-notebook/generate-test/', data),
+  getDailyFocusToday: () => api.get('/mocktest/daily-focus/today/'),
+  getDailyFocusMonthly: (params) => api.get('/mocktest/daily-focus/monthly/', { params }),
+  getGamificationSummary: () => api.get('/mocktest/gamification/summary/'),
+  getTodaysTasks: () => api.get('/mocktest/tasks/'),
+  completeTask: (data) => api.post('/mocktest/tasks/complete/', data),
 };
 
 // College Predictor APIs
@@ -83,6 +92,13 @@ export const rankPredictorApi = {
   getRankFromScore: (data) => api.post('/get-rank-from-score/', data),
   getExams: () => api.get('/exams/'),
   getCategories: () => api.get('/get-categories/'),
+};
+
+// Auth APIs
+export const authApi = {
+  googleLogin: (token) => api.post('/api/auth/google-login/', { token }),
+  updateProfile: (data) => api.post('/api/auth/update-profile/', data),
+  getCurrentUser: () => api.get('/api/auth/me/'),
 };
 
 export default api;

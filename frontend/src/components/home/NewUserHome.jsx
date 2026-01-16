@@ -1,21 +1,27 @@
 'use client';
 
 import Link from 'next/link';
-import { getUserProfile, getUserStats, getActivity } from '@/lib/gamification';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function NewUserHome() {
-  const profile = getUserProfile();
-  const stats = getUserStats() || { xpTotal: 0, currentStreak: 0, weeklyGoalCount: 2 };
-  const activity = getActivity();
+  const { user } = useAuth();
 
-  const name = profile?.full_name || profile?.name || 'Student';
-  const examTarget = profile?.exam_target || 'your exam';
+  const name = user?.full_name || user?.first_name || 'Student';
+  const examTarget = user?.exam_target || 'your exam';
   const examDisplay = examTarget
     .split('_')
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
 
-  const needsPreferences = !profile?.preferences && !profile?.target_exam;
+  // Check if onboarding is completed based on StudentProfile data
+  const needsPreferences = !user?.onboarding_completed || !user?.class_level || !user?.exam_target;
+  
+  // Get stats from user data (real-time from backend)
+  const stats = {
+    xpTotal: user?.total_xp || 0,
+    currentStreak: 0, // TODO: Add streak tracking to backend
+    weeklyGoalCount: 2, // TODO: Add weekly goals to backend
+  };
 
   return (
     <div className="pt-16 md:pt-20 min-h-screen bg-gray-50">

@@ -213,7 +213,7 @@ export function getTodaysTasks(profile, stats, activity) {
       title: 'Review weak questions',
       description: 'Go through questions you got wrong to improve',
       xpReward: 20,
-      href: '/mock-tests',
+      href: '/mistake-notebook',
       cta: 'Review',
       priority: 'low',
     });

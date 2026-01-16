@@ -9,11 +9,31 @@ from django.contrib import admin
 from django.utils.html import format_html
 
 from .models import (
-    PhoneOTP, DifficultyLevel, TestCategory, MockTest, Question,
+    PhoneOTP, DifficultyLevel, MockTest, Question,
     StudentProfile, TestAttempt, StudentAnswer, MistakeNotebook,
-    StudyGuild, XPLog, Leaderboard
+    StudyGuild, XPLog, Leaderboard, Exam
 )
 
+
+@admin.register(Exam)
+class ExamAdmin(admin.ModelAdmin):
+    """
+    Admin for Exam model.
+    Exam is the root entity - all questions and tests are organized by exam.
+    """
+    list_display = ['name', 'code', 'is_active', 'created_at', 'updated_at']
+    list_filter = ['is_active', 'created_at']
+    search_fields = ['name', 'code']
+    readonly_fields = ['created_at', 'updated_at']
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('code', 'name', 'is_active')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
 
 @admin.register(PhoneOTP)
 class PhoneOTPAdmin(admin.ModelAdmin):
@@ -33,15 +53,6 @@ class DifficultyLevelAdmin(admin.ModelAdmin):
     ordering = ['order', 'level']
 
 
-@admin.register(TestCategory)
-class TestCategoryAdmin(admin.ModelAdmin):
-    """Admin for TestCategory model."""
-    list_display = ['name', 'is_active', 'created_at', 'updated_at']
-    list_filter = ['is_active', 'created_at']
-    search_fields = ['name', 'description']
-    readonly_fields = ['created_at', 'updated_at']
-
-
 class QuestionInline(admin.TabularInline):
     """Inline admin for Questions in MockTest."""
     model = Question
@@ -52,15 +63,20 @@ class QuestionInline(admin.TabularInline):
 
 @admin.register(MockTest)
 class MockTestAdmin(admin.ModelAdmin):
-    """Admin for MockTest model."""
-    list_display = ['title', 'category', 'test_type', 'total_questions', 'total_marks', 'duration_minutes', 'is_vip', 'is_active', 'created_at']
-    list_filter = ['category', 'test_type', 'is_vip', 'is_active', 'difficulty', 'created_at']
-    search_fields = ['title', 'instructions']
+    """
+    Admin for MockTest model.
+    MockTest represents curated full-length tests or generated tests.
+    - Full Length: Curated tests with fixed questions
+    - Practice/Sectional/Custom: Generated tests (created via API)
+    """
+    list_display = ['title', 'exam', 'test_type', 'total_questions', 'total_marks', 'duration_minutes', 'is_vip', 'is_active', 'created_at']
+    list_filter = ['exam', 'test_type', 'is_vip', 'is_active', 'difficulty', 'created_at']
+    search_fields = ['title', 'instructions', 'exam__name']
     readonly_fields = ['total_marks', 'created_at', 'updated_at']
     inlines = [QuestionInline]
     fieldsets = (
         ('Basic Information', {
-            'fields': ('title', 'category', 'test_type', 'difficulty')
+            'fields': ('title', 'exam', 'test_type', 'difficulty')
         }),
         ('Test Configuration', {
             'fields': ('total_questions', 'marks_per_question', 'negative_marks', 'total_marks', 'duration_minutes')
@@ -76,14 +92,23 @@ class MockTestAdmin(admin.ModelAdmin):
 
 @admin.register(Question)
 class QuestionAdmin(admin.ModelAdmin):
-    """Admin for Question model."""
-    list_display = ['question_number', 'mock_test', 'subject', 'topic', 'difficulty_level', 'question_type', 'marks']
-    list_filter = ['mock_test', 'subject', 'difficulty_level', 'question_type', 'topic']
-    search_fields = ['text', 'topic', 'subject', 'mock_test__title']
+    """
+    Admin for Question model.
+    Questions are the source of truth - can be standalone (question bank) or attached to MockTest.
+    - Standalone questions (mock_test=None): Used for generating practice/sectional/custom tests
+    - Attached questions (mock_test set): Belong to a curated full-length test
+    """
+    list_display = ['id', 'question_number', 'mock_test', 'exam', 'year', 'subject', 'topic', 'difficulty_level', 'question_type', 'marks']
+    list_filter = ['exam', 'year', 'mock_test', 'subject', 'difficulty_level', 'question_type', 'topic']
+    search_fields = ['text', 'topic', 'subject', 'mock_test__title', 'exam__name']
     readonly_fields = ['created_at', 'updated_at']
     fieldsets = (
         ('Question Info', {
             'fields': ('mock_test', 'question_number', 'question_type', 'text')
+        }),
+        ('Exam & Year', {
+            'fields': ('exam', 'year'),
+            'description': 'Required: Exam and year identify the question source'
         }),
         ('Subject & Topic', {
             'fields': ('subject', 'topic', 'difficulty_level')
@@ -108,7 +133,7 @@ class QuestionAdmin(admin.ModelAdmin):
 @admin.register(StudentProfile)
 class StudentProfileAdmin(admin.ModelAdmin):
     """Admin for StudentProfile model."""
-    list_display = ['user', 'class_level', 'exam_target', 'total_xp', 'created_at']
+    list_display = ['user', 'class_level', 'exam_target', 'target_rank', 'tests_per_week', 'onboarding_completed', 'total_xp', 'created_at']
     list_filter = ['class_level', 'exam_target', 'created_at']
     search_fields = ['user__email', 'user__phone']
     readonly_fields = ['total_xp', 'created_at', 'updated_at']
@@ -117,7 +142,7 @@ class StudentProfileAdmin(admin.ModelAdmin):
             'fields': ('user',)
         }),
         ('Profile Information', {
-            'fields': ('class_level', 'exam_target')
+            'fields': ('class_level', 'exam_target', 'target_rank', 'tests_per_week', 'onboarding_completed')
         }),
         ('Gamification', {
             'fields': ('total_xp',)

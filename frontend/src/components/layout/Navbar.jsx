@@ -108,11 +108,25 @@ export default function Navbar() {
                 {isProfileMenuOpen && (
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
                     <Link
-                      href="/"
+                      href="/profile"
                       onClick={() => setIsProfileMenuOpen(false)}
                       className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                     >
                       Profile
+                    </Link>
+                    <Link
+                      href="/mistake-notebook"
+                      onClick={() => setIsProfileMenuOpen(false)}
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    >
+                      Mistake Notebook
+                    </Link>
+                    <Link
+                      href="/profile"
+                      onClick={() => setIsProfileMenuOpen(false)}
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 border-t border-gray-200 mt-1 pt-2"
+                    >
+                      Update Profile
                     </Link>
                     <button
                       onClick={handleLogout}
@@ -189,11 +203,25 @@ export default function Navbar() {
               {user ? (
                 <>
                   <Link
-                    href="/"
+                    href="/profile"
                     className="btn-secondary w-full text-sm py-2 text-center block"
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
                     Profile
+                  </Link>
+                  <Link
+                    href="/mistake-notebook"
+                    className="btn-secondary w-full text-sm py-2 text-center block"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    Mistake Notebook
+                  </Link>
+                  <Link
+                    href="/profile"
+                    className="btn-secondary w-full text-sm py-2 text-center block"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    Update Profile
                   </Link>
                   <button
                     onClick={handleLogout}

@@ -3,53 +3,59 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { getUserProfile, saveUserProfile } from '@/lib/gamification';
+import { authApi } from '@/lib/api';
 
-const steps = [
-  {
-    question: "What exam are you preparing for?",
-    type: 'exam',
-    field: 'target_exam',
-  },
-  {
-    question: "What's your target score/rank goal?",
-    type: 'number',
-    field: 'target_rank',
-    placeholder: 'Enter your target rank',
-  },
-  {
-    question: "How many tests do you plan per week?",
-    type: 'options',
-    field: 'tests_per_week',
-    options: ['1-2 tests', '3-5 tests', 'Daily practice'],
-  },
-];
+const commonBranches = ['CSE', 'ECE', 'ME', 'CE', 'EE', 'IT'];
 
 export default function OnboardingPreferencesPage() {
   const router = useRouter();
-  const [currentStep, setCurrentStep] = useState(0);
+  const { user, updateUser, refreshUser } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [step, setStep] = useState(1);
+  const totalSteps = 3;
+
   const [formData, setFormData] = useState({
-    target_exam: '',
+    phone: '',
+    class_level: '',
+    exam_target: '',
     target_rank: '',
     tests_per_week: '',
+    preferred_branches: [],
   });
-  const [loading, setLoading] = useState(false);
-  const { updateUser } = useAuth();
 
-  const currentQuestion = steps[currentStep];
+  useEffect(() => {
+    if (user) {
+      setFormData(prev => ({
+        ...prev,
+        phone: user.phone || '',
+        class_level: user.class_level || '',
+        exam_target: user.exam_target || '',
+        preferred_branches: user.preferred_branches ?
+          (typeof user.preferred_branches === 'string' ? user.preferred_branches.split(',') : user.preferred_branches)
+          : [],
+      }));
+    }
+  }, [user]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleOptionSelect = (value) => {
-    setFormData((prev) => ({ ...prev, [currentQuestion.field]: value }));
+  const handleBranchToggle = (branch) => {
+    setFormData((prev) => {
+      const branches = prev.preferred_branches || [];
+      const newBranches = branches.includes(branch)
+        ? branches.filter((b) => b !== branch)
+        : [...branches, branch];
+      return { ...prev, preferred_branches: newBranches };
+    });
   };
 
   const handleNext = () => {
-    if (currentStep < steps.length - 1) {
-      setCurrentStep(currentStep + 1);
+    if (step < totalSteps) {
+      setStep(step + 1);
     } else {
       handleSubmit();
     }
@@ -57,26 +63,166 @@ export default function OnboardingPreferencesPage() {
 
   const handleSubmit = async () => {
     setLoading(true);
-    // TODO: Save preferences to backend
-    // Update user profile with preferences
-    const profile = getUserProfile();
-    const updatedProfile = {
-      ...profile,
-      preferences: formData,
-      testsPerWeek: formData.tests_per_week,
-      targetRank: formData.target_rank,
-      targetExam: formData.target_exam,
-    };
-    saveUserProfile(updatedProfile);
-    updateUser(updatedProfile);
-    
-    setTimeout(() => {
+    try {
+      // Prepare data for backend - include ALL fields
+      const backendData = {
+        phone: formData.phone,
+        class_level: formData.class_level,
+        exam_target: formData.exam_target,
+        target_rank: formData.target_rank ? parseInt(formData.target_rank) : null,
+        tests_per_week: formData.tests_per_week || null,
+        preferred_branches: Array.isArray(formData.preferred_branches)
+          ? formData.preferred_branches.join(',')
+          : formData.preferred_branches,
+      };
+
+      // Save to backend - this will create/update StudentProfile
+      await authApi.updateProfile(backendData);
+
+      // Refresh user data from backend to get latest StudentProfile
+      await refreshUser();
+
       router.push('/');
-    }, 500);
+    } catch (error) {
+      console.error('Failed to update profile:', error);
+      setError(error.response?.data?.detail || 'Failed to save profile. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
+  // Render Step 1: Personal Details (Phone, Class)
+  const renderStep1 = () => (
+    <div className="space-y-5 animate-fadeIn">
+      <h2 className="text-xl font-bold text-gray-900">Personal Details</h2>
+      <div>
+        <label className="block text-sm font-semibold text-gray-700 mb-2">
+          Phone Number *
+        </label>
+        <input
+          type="tel"
+          name="phone"
+          value={formData.phone}
+          onChange={(e) =>
+            setFormData((prev) => ({
+              ...prev,
+              phone: e.target.value.replace(/\D/g, '').slice(0, 10),
+            }))
+          }
+          className="input-field"
+          placeholder="Enter 10-digit number"
+        />
+      </div>
+      <div>
+        <label className="block text-sm font-semibold text-gray-700 mb-2">
+          Class Level *
+        </label>
+        <select
+          name="class_level"
+          value={formData.class_level}
+          onChange={handleChange}
+          className="input-field"
+        >
+          <option value="">Select class level</option>
+          <option value="class_11">Class 11</option>
+          <option value="class_12">Class 12</option>
+          <option value="dropper">Dropper</option>
+          <option value="graduate">Graduate</option>
+        </select>
+      </div>
+    </div>
+  );
+
+  // Render Step 2: Exam & Branches
+  const renderStep2 = () => (
+    <div className="space-y-5 animate-fadeIn">
+      <h2 className="text-xl font-bold text-gray-900">Goals & Preferences</h2>
+      <div>
+        <label className="block text-sm font-semibold text-gray-700 mb-2">
+          Target Exam *
+        </label>
+        <select
+          name="exam_target"
+          value={formData.exam_target}
+          onChange={handleChange}
+          className="input-field"
+        >
+          <option value="">Select target exam</option>
+          <option value="jee_main">JEE Main</option>
+          <option value="jee_advanced">JEE Advanced</option>
+          <option value="neet">NEET</option>
+          <option value="eapcet">EAPCET</option>
+          <option value="bitsat">BITSAT</option>
+        </select>
+      </div>
+      <div>
+        <label className="block text-sm font-semibold text-gray-700 mb-3">
+          Preferred Branches (Optional)
+        </label>
+        <div className="flex flex-wrap gap-2">
+          {commonBranches.map((branch) => (
+            <button
+              key={branch}
+              type="button"
+              onClick={() => handleBranchToggle(branch.toLowerCase())}
+              className={`px-3 py-2 text-sm rounded-lg font-medium transition-all ${formData.preferred_branches?.includes(branch.toLowerCase())
+                  ? 'bg-primary text-white shadow-md'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+            >
+              {branch}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  // Render Step 3: Strategy (Gamification)
+  const renderStep3 = () => (
+    <div className="space-y-5 animate-fadeIn">
+      <h2 className="text-xl font-bold text-gray-900">Study Strategy</h2>
+      <div>
+        <label className="block text-sm font-semibold text-gray-700 mb-2">
+          Target Rank/Score Goal
+        </label>
+        <input
+          type="number"
+          name="target_rank"
+          value={formData.target_rank}
+          onChange={handleChange}
+          placeholder="e.g. 1000"
+          className="input-field"
+        />
+      </div>
+      <div>
+        <label className="block text-sm font-semibold text-gray-700 mb-2">
+          Tests Per Week
+        </label>
+        <div className="space-y-2">
+          {['1-2 tests', '3-5 tests', 'Daily practice'].map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => setFormData(p => ({ ...p, tests_per_week: option }))}
+              className={`w-full p-3 rounded-lg border text-left transition-all ${formData.tests_per_week === option
+                  ? 'border-primary bg-primary/5 text-primary font-medium'
+                  : 'border-gray-200 hover:border-gray-300'
+                }`}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
   const canProceed = () => {
-    return formData[currentQuestion.field] !== '';
+    if (step === 1) return formData.phone && formData.phone.length === 10 && formData.class_level;
+    if (step === 2) return formData.exam_target;
+    if (step === 3) return true; // Optional
+    return false;
   };
 
   return (
@@ -86,111 +232,67 @@ export default function OnboardingPreferencesPage() {
         <div className="mb-8">
           <div className="flex justify-between items-center mb-2">
             <span className="text-sm font-semibold text-gray-700">
-              Step {currentStep + 1} of {steps.length}
+              Step {step} of {totalSteps}
             </span>
             <span className="text-sm text-gray-500">
-              {Math.round(((currentStep + 1) / steps.length) * 100)}%
+              {Math.round((step / totalSteps) * 100)}%
             </span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2">
             <div
               className="bg-primary h-2 rounded-full transition-all duration-300"
               style={{
-                width: `${((currentStep + 1) / steps.length) * 100}%`,
+                width: `${(step / totalSteps) * 100}%`,
               }}
             />
           </div>
         </div>
 
-        <div className="card">
-          <div className="text-center mb-8">
-            <div className="text-5xl mb-4">🎯</div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">
-              {currentQuestion.question}
-            </h1>
-            <p className="text-gray-600 text-sm">
-              Help us personalize your experience
-            </p>
-          </div>
+        <div className="card min-h-[400px] flex flex-col justify-between">
+          <div>
+            <div className="text-center mb-6">
+              <h1 className="text-2xl font-bold text-gray-900">
+                Let's get to know you
+              </h1>
+              <p className="text-gray-600 text-sm">
+                Customizing your prep journey...
+              </p>
+            </div>
 
-          <div className="space-y-6">
-            {currentQuestion.type === 'exam' && (
-              <select
-                name={currentQuestion.field}
-                value={formData[currentQuestion.field]}
-                onChange={handleChange}
-                className="input-field"
-                autoFocus
-              >
-                <option value="">Select exam</option>
-                <option value="jee_main">JEE Main</option>
-                <option value="jee_advanced">JEE Advanced</option>
-                <option value="neet">NEET</option>
-                <option value="eapcet">EAPCET</option>
-                <option value="bitsat">BITSAT</option>
-              </select>
-            )}
-
-            {currentQuestion.type === 'number' && (
-              <input
-                type="number"
-                name={currentQuestion.field}
-                value={formData[currentQuestion.field]}
-                onChange={handleChange}
-                placeholder={currentQuestion.placeholder}
-                className="input-field text-center text-2xl"
-                min="1"
-                autoFocus
-              />
-            )}
-
-            {currentQuestion.type === 'options' && (
-              <div className="space-y-3">
-                {currentQuestion.options.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    onClick={() => handleOptionSelect(option)}
-                    className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
-                      formData[currentQuestion.field] === option
-                        ? 'border-primary bg-primary/5'
-                        : 'border-gray-200 hover:border-primary/50'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-gray-900">{option}</span>
-                      {formData[currentQuestion.field] === option && (
-                        <span className="text-primary">✓</span>
-                      )}
-                    </div>
-                  </button>
-                ))}
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg text-sm mb-4">
+                {error}
               </div>
             )}
 
-            <div className="flex gap-4">
-              {currentStep > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setCurrentStep(currentStep - 1)}
-                  className="btn-secondary flex-1"
-                >
-                  Back
-                </button>
-              )}
+            {step === 1 && renderStep1()}
+            {step === 2 && renderStep2()}
+            {step === 3 && renderStep3()}
+          </div>
+
+          <div className="flex gap-4 mt-8 pt-4 border-t border-gray-100">
+            {step > 1 && (
               <button
                 type="button"
-                onClick={handleNext}
-                disabled={!canProceed() || loading}
-                className="btn-primary flex-1"
+                onClick={() => setStep(step - 1)}
+                className="btn-secondary flex-1"
+                disabled={loading}
               >
-                {loading
-                  ? 'Setting up...'
-                  : currentStep === steps.length - 1
+                Back
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleNext}
+              disabled={!canProceed() || loading}
+              className="btn-primary flex-1"
+            >
+              {loading
+                ? 'Saving...'
+                : step === totalSteps
                   ? 'Complete Setup'
                   : 'Next'}
-              </button>
-            </div>
+            </button>
           </div>
         </div>
       </div>
