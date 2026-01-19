@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useAuth } from '@/contexts/AuthContext';
 import { mockTestApi } from '@/lib/api';
 
 const TEST_TYPES = [
@@ -23,6 +24,7 @@ const DIFFICULTY_LEVELS = [
 
 export default function MockTestsPage() {
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const [step, setStep] = useState(1); // 1: Exam, 2: Year, 3: Test Type, 4: Tests/Customize
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -44,7 +46,7 @@ export default function MockTestsPage() {
   const [selectedSubjects, setSelectedSubjects] = useState([]);
   const [selectedDifficulty, setSelectedDifficulty] = useState([]);
   const [questionCount, setQuestionCount] = useState(30);
-  const [timePerQuestion, setTimePerQuestion] = useState(2);
+  const [timePerQuestion, setTimePerQuestion] = useState(4);
   const [generating, setGenerating] = useState(false);
   const [availableQuestionCount, setAvailableQuestionCount] = useState(0);
   const [loadingQuestionCount, setLoadingQuestionCount] = useState(false);
@@ -54,10 +56,20 @@ export default function MockTestsPage() {
   const totalTimeHours = Math.floor(totalTime / 60);
   const totalTimeMins = totalTime % 60;
 
-  // Load exams on mount
+  // Redirect non-logged-in users to public home page with "How it works" section
   useEffect(() => {
-    loadExams();
-  }, []);
+    if (!authLoading && !user) {
+      // Redirect to home page with hash to scroll to "How it works" section
+      router.push('/#how-it-works');
+    }
+  }, [user, authLoading, router]);
+
+  // Load exams on mount - ONLY if user is logged in
+  useEffect(() => {
+    if (user && !authLoading) {
+      loadExams();
+    }
+  }, [user, authLoading]);
 
   // Load years when exam is selected
   useEffect(() => {
@@ -86,6 +98,11 @@ export default function MockTestsPage() {
   }, [selectedExam, selectedYears, selectedSubjects, selectedDifficulty, selectedTestType]);
 
   const loadExams = async () => {
+    // Only load exams if user is logged in
+    if (!user) {
+      return;
+    }
+
     try {
       setLoading(true);
       const response = await mockTestApi.getExams();
@@ -278,6 +295,27 @@ export default function MockTestsPage() {
       setGenerating(false);
     }
   };
+
+  // Show loading while checking authentication
+  if (authLoading) {
+    return (
+      <div className="pt-16 md:pt-20 min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  // If not logged in, show message (redirect will happen via useEffect)
+  if (!user) {
+    return (
+      <div className="pt-16 md:pt-20 min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-gray-600">Redirecting to login...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>

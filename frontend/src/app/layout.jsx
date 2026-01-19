@@ -2,6 +2,7 @@ import './globals.css';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import { AuthProvider } from '@/contexts/AuthContext';
+import ToastContainer from '@/components/common/Toast';
 import Script from 'next/script';
 
 export const metadata = {
@@ -23,6 +24,7 @@ export default function RootLayout({ children }) {
           <Navbar />
           <main className="flex-1">{children}</main>
           <Footer />
+          <ToastContainer />
         </AuthProvider>
       </body>
     </html>

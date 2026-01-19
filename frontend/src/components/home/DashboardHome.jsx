@@ -271,22 +271,22 @@ function ProgressInsights({ activity }) {
       </div>
       {trend && recentTests.length > 0 && (
         <div className="pt-3 mt-3 border-t border-gray-200">
-          <div className="text-sm text-gray-600">
-            Trend:{' '}
-            <span
-              className={`font-semibold ${
-                trend === 'improving'
-                  ? 'text-green-600'
-                  : trend === 'declining'
-                  ? 'text-red-600'
-                  : 'text-gray-600'
-              }`}
-            >
-              {trend.charAt(0).toUpperCase() + trend.slice(1)}
-            </span>
+            <div className="text-sm text-gray-600">
+              Trend:{' '}
+              <span
+                className={`font-semibold ${
+                  trend === 'improving'
+                    ? 'text-green-600'
+                    : trend === 'declining'
+                    ? 'text-red-600'
+                    : 'text-gray-600'
+                }`}
+              >
+                {trend.charAt(0).toUpperCase() + trend.slice(1)}
+              </span>
+            </div>
           </div>
-        </div>
-      )}
+        )}
     </div>
   );
 }

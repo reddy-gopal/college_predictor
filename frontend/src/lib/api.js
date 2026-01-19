@@ -42,14 +42,38 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 || error.response?.status === 403) {
+    // Only handle 401 (Unauthorized) - this means token is invalid/expired
+    // 403 (Forbidden) is a permission issue, not an auth issue - don't log out
+    if (error.response?.status === 401) {
       // Clear token from memory
       authToken = null;
-      // Redirect to login if not already there
-      if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
-        window.location.href = '/login';
+      // Only redirect if we have a token in sessionStorage (meaning user was logged in)
+      // This prevents redirecting when user is legitimately not logged in
+      if (typeof window !== 'undefined') {
+        const sessionToken = sessionStorage.getItem('auth_token');
+        const pathname = window.location.pathname;
+        const publicPaths = ['/login', '/register', '/'];
+        const isPublicPath = publicPaths.some(path => pathname === path || pathname.startsWith(path + '/'));
+        
+        // Only redirect if:
+        // 1. We're not on a public path
+        // 2. We had a token (user was logged in, so this is a real auth error)
+        // 3. We're not already on login/register
+        if (!isPublicPath && sessionToken && !pathname.includes('/login') && !pathname.includes('/register')) {
+          // Clear session token since auth failed
+          sessionStorage.removeItem('auth_token');
+          // Use a small delay to avoid race conditions with React state updates
+          setTimeout(() => {
+            // Double-check we're still not on a public path (React might have navigated)
+            if (!window.location.pathname.includes('/login') && 
+                !window.location.pathname.includes('/register')) {
+              window.location.href = '/login';
+            }
+          }, 100);
+        }
       }
     }
+    // For 403 errors, don't log out - it's a permission issue, not an auth issue
     return Promise.reject(error);
   }
 );
@@ -66,6 +90,7 @@ export const mockTestApi = {
   submitAnswer: (attemptId, data) => api.post(`/mocktest/test-attempts/${attemptId}/submit_answer/`, data),
   submitTest: (attemptId) => api.post(`/mocktest/test-attempts/${attemptId}/submit/`),
   getAttemptAnswers: (attemptId) => api.get(`/mocktest/test-attempts/${attemptId}/answers/`),
+  getUnattemptedQuestions: (attemptId) => api.get(`/mocktest/test-attempts/${attemptId}/unattempted/`),
   getExamYears: (examId) => api.get(`/mocktest/exam-years/?exam_id=${examId}`),
   getAvailableQuestionsCount: (params) => api.get('/mocktest/available-questions-count/', { params }),
   generateTest: (data) => api.post('/mocktest/generate-test/', data),
@@ -78,6 +103,40 @@ export const mockTestApi = {
   getGamificationSummary: () => api.get('/mocktest/gamification/summary/'),
   getTodaysTasks: () => api.get('/mocktest/tasks/'),
   completeTask: (data) => api.post('/mocktest/tasks/complete/', data),
+  // Profile APIs
+  getProfileOverview: () => api.get('/mocktest/profile/overview/'),
+  getProfileBadges: () => api.get('/mocktest/profile/badges/'),
+  getActivityHeatmap: (params) => api.get('/mocktest/profile/activity-heatmap/', { params }),
+  getProfileAnalytics: () => api.get('/mocktest/profile/analytics/'),
+};
+
+// Room (Guild) APIs
+export const roomApi = {
+  // Room CRUD
+  getRooms: (params) => api.get('/mocktest/rooms/', { params }),
+  getRoomByCode: (code) => api.get(`/mocktest/rooms/${code}/`),
+  createRoom: (data) => api.post('/mocktest/rooms/', data),
+  getMyActiveRoom: () => api.get('/mocktest/rooms/my-active-room/'),
+  
+  // Room actions
+  joinRoom: (data) => {
+    const { code, password } = data;
+    return api.post(`/mocktest/rooms/${code}/join/`, { code, password: password || '' });
+  },
+  getParticipants: (code) => api.get(`/mocktest/rooms/${code}/participants/`),
+  kickParticipant: (code, userId) => api.post(`/mocktest/rooms/${code}/kick/${userId}/`),
+  startRoom: (code) => api.post(`/mocktest/rooms/${code}/start/`),
+  endRoom: (code) => api.post(`/mocktest/rooms/${code}/end/`),
+  getQuestions: (code) => api.get(`/mocktest/rooms/${code}/questions/`),
+  getTestSummary: (code, params) => api.get(`/mocktest/rooms/${code}/test-summary/`, { params }),
+  previewTestSummary: (params) => api.get('/mocktest/rooms/preview-test-summary/', { params }),
+  getLeaderboard: (code) => api.get(`/mocktest/rooms/${code}/leaderboard/`),
+  getSubmissionStatus: (code) => api.get(`/mocktest/rooms/${code}/submission-status/`),
+  getReview: (code) => api.get(`/mocktest/rooms/${code}/review/`),
+  getUnattempted: (code) => api.get(`/mocktest/rooms/${code}/unattempted/`),
+  
+  // Participant attempts
+  submitAnswer: (data) => api.post('/mocktest/participant-attempts/submit/', data),
 };
 
 // College Predictor APIs

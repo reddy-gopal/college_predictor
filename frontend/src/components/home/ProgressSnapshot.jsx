@@ -18,17 +18,23 @@ export default function ProgressSnapshot({ stats, activity, user }) {
     ? Math.max(...recentTests.map((t) => t.percentile || 0))
     : null;
 
-  // Simple rank category logic (can be enhanced)
-  const getRankCategory = () => {
-    if (!latestTest || !user?.target_rank) return null;
-    const score = latestTest.score;
-    const goal = user.target_rank;
-    if (score >= goal * 0.9) return 'Safe';
-    if (score >= goal * 0.7) return 'Target';
-    return 'Dream';
+  // Format exam target for display
+  const getExamTarget = () => {
+    if (!user?.exam_target) return null;
+    return user.exam_target
+      .split('_')
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
   };
 
-  const rankCategory = getRankCategory();
+  // Get target rank
+  const getTargetRank = () => {
+    if (!user?.target_rank) return null;
+    return user.target_rank;
+  };
+
+  const examTarget = getExamTarget();
+  const targetRank = getTargetRank();
   const xpProgress = getXPProgress(stats?.xpTotal || 0);
 
   return (
@@ -47,13 +53,22 @@ export default function ProgressSnapshot({ stats, activity, user }) {
         color="secondary"
       />
       
-      {/* Row 2: Rank Category & XP */}
-      <SnapshotCard
-        label="Rank Category"
-        value={rankCategory || '—'}
-        icon="🎯"
-        color="accent-1"
-      />
+      {/* Row 2: Exam Target & Target Rank & XP */}
+      <div className="card bg-gradient-to-br from-accent-1/10 to-accent-1/5 border-2 border-accent-1/20 text-center">
+        <div className="text-3xl mb-2">🎯</div>
+        <div className="text-base font-bold text-gray-900 mb-1">
+          {examTarget || '—'}
+        </div>
+        <div className="text-xs text-gray-600 mb-2">Exam Target</div>
+        {targetRank ? (
+          <div className="text-lg font-bold bg-gradient-to-r from-accent-1 to-accent-2 bg-clip-text text-transparent">
+            Rank {targetRank.toLocaleString()}
+          </div>
+        ) : (
+          <div className="text-lg font-bold text-gray-500">—</div>
+        )}
+        <div className="text-xs text-gray-600 mt-1">Target Rank</div>
+      </div>
       <div className="card bg-gradient-to-br from-accent-2/10 to-accent-3/10 border-2 border-accent-2/20">
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm font-semibold text-gray-700">XP</span>

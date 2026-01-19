@@ -1,24 +1,36 @@
 'use client';
 
 import Link from 'next/link';
-import { mockTestApi } from '@/lib/api';
-import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
+import { useEffect } from 'react';
 
 export default function PublicHome() {
-  const [mockTestsCount, setMockTestsCount] = useState(0);
+  const router = useRouter();
+  const { user } = useAuth();
 
+  const handleAttemptTest = () => {
+    if (user) {
+      router.push('/mock-tests');
+    } else {
+      router.push('/login');
+    }
+  };
+
+  // Scroll to "How it works" section if hash is present in URL
   useEffect(() => {
-    // Fetch mock tests count
-    mockTestApi
-      .getAll()
-      .then((response) => {
-        const count =
-          response.data?.results?.length || response.data?.length || 0;
-        setMockTestsCount(count);
-      })
-      .catch(() => {
-        // Silently fail
-      });
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash;
+      if (hash === '#how-it-works') {
+        // Small delay to ensure DOM is ready
+        setTimeout(() => {
+          const element = document.getElementById('how-it-works');
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }, 100);
+      }
+    }
   }, []);
 
   return (
@@ -39,12 +51,82 @@ export default function PublicHome() {
             <Link href="/onboarding" className="btn-primary text-lg px-8 py-4">
               Get Started Free
             </Link>
-            <Link
-              href="/mock-tests"
+            <button
+              onClick={handleAttemptTest}
               className="btn-secondary text-lg px-8 py-4"
             >
-              Explore Mock Tests
-            </Link>
+              Attempt a Test
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* How It Works Demo Section */}
+      <section id="how-it-works" className="section-container py-16 bg-white">
+        <div className="text-center mb-12">
+          <h2 className="section-title">How It Works</h2>
+          <p className="section-subtitle">
+            See how easy it is to improve your exam preparation
+          </p>
+        </div>
+
+        <div className="max-w-5xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+            <DemoStep
+              step={1}
+              icon="📝"
+              title="Take Mock Tests"
+              description="Practice with comprehensive mock tests that mirror real exam conditions. Get instant feedback on your performance."
+            />
+            <DemoStep
+              step={2}
+              icon="📊"
+              title="Track Your Progress"
+              description="Monitor your scores, percentiles, and improvement over time. Identify weak areas and focus your studies."
+            />
+            <DemoStep
+              step={3}
+              icon="🎯"
+              title="Achieve Your Goals"
+              description="Set targets, track streaks, earn XP, and stay motivated. Get personalized recommendations to reach your dream college."
+            />
+          </div>
+
+          {/* Demo Preview Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <DemoCard
+              title="📊 Real-Time Dashboard"
+              features={[
+                "Track your latest scores and best percentile",
+                "Monitor your rank category progress",
+                "View XP points and level progression",
+                "See your daily attendance streak"
+              ]}
+              color="primary"
+            />
+            <DemoCard
+              title="🎮 Gamification System"
+              features={[
+                "Earn XP points for completing tests",
+                "Maintain daily streaks for bonus rewards",
+                "Complete weekly goals for extra XP",
+                "Level up as you progress"
+              ]}
+              color="secondary"
+            />
+          </div>
+
+          {/* CTA in Demo Section */}
+          <div className="text-center">
+            <button
+              onClick={handleAttemptTest}
+              className="btn-primary text-lg px-8 py-4"
+            >
+              Attempt a Test Now
+            </button>
+            <p className="text-sm text-gray-600 mt-4">
+              {user ? 'Continue to mock tests' : 'Sign in to get started'}
+            </p>
           </div>
         </div>
       </section>
@@ -62,7 +144,7 @@ export default function PublicHome() {
           <FeatureCard
             icon="📝"
             title="Mock Tests"
-            description={`Access ${mockTestsCount}+ comprehensive mock tests designed to mirror real exam conditions.`}
+            description="Access comprehensive mock tests designed to mirror real exam conditions with detailed explanations."
             href="/mock-tests"
             color="primary"
           />
@@ -125,12 +207,20 @@ export default function PublicHome() {
             Join thousands of students who are already using our platform to
             achieve their dreams.
           </p>
-          <Link
-            href="/onboarding"
-            className="bg-white text-primary px-8 py-4 rounded-lg font-semibold hover:bg-gray-100 transition-colors inline-block"
-          >
-            Get Started Free
-          </Link>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link
+              href="/onboarding"
+              className="bg-white text-primary px-8 py-4 rounded-lg font-semibold hover:bg-gray-100 transition-colors inline-block text-center"
+            >
+              Get Started Free
+            </Link>
+            <button
+              onClick={handleAttemptTest}
+              className="bg-white/10 backdrop-blur-sm text-white border-2 border-white/30 px-8 py-4 rounded-lg font-semibold hover:bg-white/20 transition-colors"
+            >
+              Attempt a Test
+            </button>
+          </div>
         </div>
       </section>
     </div>
@@ -161,6 +251,40 @@ function FeatureCard({ icon, title, description, href, color, disabled }) {
   }
 
   return <Link href={href}>{content}</Link>;
+}
+
+function DemoStep({ step, icon, title, description }) {
+  return (
+    <div className="text-center">
+      <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 text-2xl mb-4">
+        {step}
+      </div>
+      <div className="text-4xl mb-3">{icon}</div>
+      <h3 className="text-xl font-bold text-gray-900 mb-2">{title}</h3>
+      <p className="text-gray-600">{description}</p>
+    </div>
+  );
+}
+
+function DemoCard({ title, features, color }) {
+  const colorClasses = {
+    primary: 'from-primary/10 to-primary/5 border-primary/20',
+    secondary: 'from-secondary/10 to-secondary/5 border-secondary/20',
+  };
+
+  return (
+    <div className={`card bg-gradient-to-br ${colorClasses[color]} border-2`}>
+      <h3 className="text-xl font-bold text-gray-900 mb-4">{title}</h3>
+      <ul className="space-y-2">
+        {features.map((feature, index) => (
+          <li key={index} className="flex items-start gap-2">
+            <span className="text-primary mt-1">✓</span>
+            <span className="text-gray-700">{feature}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 function TestimonialCard({ quote, author, exam }) {

@@ -2,14 +2,17 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { roomApi } from '@/lib/api';
 
 export default function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [activeRoom, setActiveRoom] = useState(null);
   const pathname = usePathname();
+  const router = useRouter();
   const { user, logout } = useAuth();
 
   useEffect(() => {
@@ -19,6 +22,43 @@ export default function Navbar() {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  // Check for active room
+  useEffect(() => {
+    const checkActiveRoom = async () => {
+      if (!user) {
+        setActiveRoom(null);
+        return;
+      }
+      
+      // Don't show "Return to Room" if already on a room page (lobby, test, or results)
+      if (pathname?.match(/\/guild\/[A-Z0-9]+\/(lobby|test|results)/)) {
+        setActiveRoom(null);
+        return;
+      }
+      
+      try {
+        const response = await roomApi.getMyActiveRoom();
+        if (response.data.has_active_room && response.data.room) {
+          setActiveRoom(response.data.room);
+        } else {
+          setActiveRoom(null);
+        }
+      } catch (err) {
+        // Silently fail - user might not have an active room
+        setActiveRoom(null);
+      }
+    };
+
+    if (user) {
+      checkActiveRoom();
+      // Check periodically (every 10 seconds) for active room
+      const interval = setInterval(checkActiveRoom, 10000);
+      return () => clearInterval(interval);
+    } else {
+      setActiveRoom(null);
+    }
+  }, [user, pathname]);
 
   // Close profile menu when clicking outside
   useEffect(() => {
@@ -34,6 +74,7 @@ export default function Navbar() {
   const navLinks = [
     { href: '/', label: 'Home' },
     { href: '/mock-tests', label: 'Mock Tests' },
+    { href: '/guild', label: 'Guild', icon: '🎯' },
     { href: '/predict-college', label: 'College Predictor' },
     { href: '/predict-rank', label: 'Rank Predictor' },
     { href: '/scholarships', label: 'Scholarships' },
@@ -80,6 +121,18 @@ export default function Navbar() {
                 {link.label}
               </Link>
             ))}
+            {/* Return to Room Button */}
+            {activeRoom && (
+              <button
+                onClick={() => router.push(`/guild/${activeRoom.code}/lobby`)}
+                className="px-4 py-2 rounded-lg font-medium transition-all duration-200 bg-green-600 text-white hover:bg-green-700 flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+                Return to Room {activeRoom.code}
+              </button>
+            )}
           </div>
 
           {/* Login/Profile Button */}
@@ -199,6 +252,21 @@ export default function Navbar() {
                 {link.label}
               </Link>
             ))}
+            {/* Return to Room Button (Mobile) */}
+            {activeRoom && (
+              <button
+                onClick={() => {
+                  router.push(`/guild/${activeRoom.code}/lobby`);
+                  setIsMobileMenuOpen(false);
+                }}
+                className="w-full mx-4 mt-2 px-4 py-3 rounded-lg font-medium transition-all bg-green-600 text-white hover:bg-green-700 flex items-center justify-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+                Return to Room {activeRoom.code}
+              </button>
+            )}
             <div className="px-4 py-3 space-y-2">
               {user ? (
                 <>
