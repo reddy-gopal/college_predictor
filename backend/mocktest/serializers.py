@@ -13,7 +13,8 @@ from django.conf import settings
 from .models import (
     PhoneOTP, Exam, DifficultyLevel, MockTest, Question,
     StudentProfile, TestAttempt, StudentAnswer, MistakeNotebook,
-    StudyGuild, XPLog, Leaderboard, DailyFocus
+    StudyGuild, XPLog, Leaderboard, DailyFocus,
+    Room, RoomParticipant, RoomQuestion, ParticipantAttempt
 )
 
 
@@ -649,4 +650,381 @@ class DailyFocusSerializer(serializers.ModelSerializer):
             'created_at',
         ]
         read_only_fields = ['id', 'student', 'created_at']
+
+
+class RoomQuestionSerializer(serializers.ModelSerializer):
+    """Serializer for RoomQuestion."""
+    question = QuestionSerializer(read_only=True)
+    question_id = serializers.PrimaryKeyRelatedField(
+        queryset=Question.objects.all(),
+        source='question',
+        write_only=True
+    )
+    
+    class Meta:
+        model = RoomQuestion
+        fields = [
+            'id',
+            'room',
+            'question',
+            'question_id',
+            'question_number',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'created_at']
+
+
+class ParticipantAttemptSerializer(serializers.ModelSerializer):
+    """Serializer for ParticipantAttempt."""
+    room_question = RoomQuestionSerializer(read_only=True)
+    room_question_id = serializers.PrimaryKeyRelatedField(
+        queryset=RoomQuestion.objects.all(),
+        source='room_question',
+        write_only=True
+    )
+    
+    class Meta:
+        model = ParticipantAttempt
+        fields = [
+            'id',
+            'participant',
+            'room_question',
+            'room_question_id',
+            'selected_option',
+            'answer_text',
+            'is_correct',
+            'marks_obtained',
+            'time_spent_seconds',
+            'started_at',
+            'submitted_at',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'is_correct', 'marks_obtained', 'created_at', 'updated_at']
+
+
+class ParticipantAttemptCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating/updating ParticipantAttempt."""
+    
+    class Meta:
+        model = ParticipantAttempt
+        fields = [
+            'room_question',
+            'selected_option',
+            'answer_text',
+            'time_spent_seconds',
+            'started_at',
+            'submitted_at',
+        ]
+
+
+class RoomParticipantSerializer(serializers.ModelSerializer):
+    """Serializer for RoomParticipant."""
+    user_email = serializers.EmailField(source='user.email', read_only=True)
+    user_name = serializers.SerializerMethodField()
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    
+    class Meta:
+        model = RoomParticipant
+        fields = [
+            'id',
+            'room',
+            'user',
+            'user_email',
+            'user_name',
+            'joined_at',
+            'status',
+            'status_display',
+            'randomization_seed',
+        ]
+        read_only_fields = ['id', 'joined_at', 'randomization_seed']
+    
+    def get_user_name(self, obj):
+        """Get user's full name or email."""
+        if obj.user.first_name or obj.user.last_name:
+            return f"{obj.user.first_name or ''} {obj.user.last_name or ''}".strip()
+        return obj.user.email
+
+
+class RoomCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating a Room."""
+    password = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=True,
+        help_text="Password for private rooms (leave empty for public rooms)"
+    )
+    exam = serializers.PrimaryKeyRelatedField(
+        queryset=Exam.objects.all(),
+        source='exam_id'
+    )
+    code = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        help_text="Room code (auto-generated if not provided)"
+    )
+    
+    class Meta:
+        model = Room
+        fields = [
+            'code',
+            'exam',
+            'subject_mode',
+            'subjects',
+            'number_of_questions',
+            'time_per_question',
+            'time_buffer',
+            'difficulty',
+            'question_types',
+            'question_type_mix',
+            'randomization_mode',
+            'privacy',
+            'password',
+            'participant_limit',
+            'allow_pause',
+            'start_time',
+        ]
+    
+    def validate(self, attrs):
+        """Validate room configuration."""
+        # Validate password for private rooms
+        if attrs.get('privacy') == Room.PRIVATE:
+            password = attrs.get('password', '')
+            if not password:
+                raise serializers.ValidationError({
+                    'password': 'Password is required for private rooms.'
+                })
+        
+        # Validate subjects for specific mode
+        if attrs.get('subject_mode') == Room.SubjectMode.SPECIFIC:
+            subjects = attrs.get('subjects', [])
+            if not subjects or len(subjects) == 0:
+                raise serializers.ValidationError({
+                    'subjects': 'Subjects must be specified when subject_mode is "specific".'
+                })
+        
+        # Validate number of questions
+        number_of_questions = attrs.get('number_of_questions', 0)
+        if number_of_questions <= 0:
+            raise serializers.ValidationError({
+                'number_of_questions': 'Number of questions must be greater than 0.'
+            })
+        
+        # Validate time per question
+        time_per_question = attrs.get('time_per_question', 0)
+        if time_per_question <= 0:
+            raise serializers.ValidationError({
+                'time_per_question': 'Time per question must be greater than 0.'
+            })
+        
+        return attrs
+    
+    def create(self, validated_data):
+        """Create room with password hashing."""
+        from django.contrib.auth.hashers import make_password
+        import secrets
+        import string
+        
+        # Generate unique room code
+        code = validated_data.pop('code', None)
+        if not code:
+            while True:
+                code = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(6))
+                if not Room.objects.filter(code=code).exists():
+                    break
+        
+        # Handle password
+        password = validated_data.pop('password', None)
+        if password and validated_data.get('privacy') == Room.PRIVATE:
+            validated_data['password_hash'] = make_password(password)
+        elif validated_data.get('privacy') == Room.PUBLIC:
+            validated_data['password_hash'] = None
+        
+        # Set host
+        validated_data['host'] = self.context['request'].user
+        
+        room = Room.objects.create(code=code, **validated_data)
+        return room
+
+
+class RoomListSerializer(serializers.ModelSerializer):
+    """Lightweight serializer for Room list views."""
+    host_email = serializers.EmailField(source='host.email', read_only=True)
+    exam_name = serializers.CharField(source='exam_id.name', read_only=True)
+    participant_count = serializers.SerializerMethodField()
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    privacy_display = serializers.CharField(source='get_privacy_display', read_only=True)
+    is_full = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Room
+        fields = [
+            'id',
+            'code',
+            'host',
+            'host_email',
+            'exam_id',
+            'exam_name',
+            'number_of_questions',
+            'duration',
+            'time_per_question',
+            'difficulty',
+            'privacy',
+            'privacy_display',
+            'participant_limit',
+            'participant_count',
+            'is_full',
+            'status',
+            'status_display',
+            'start_time',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'duration', 'created_at']
+    
+    def get_participant_count(self, obj):
+        """Get count of active participants."""
+        return obj.participants.filter(status=RoomParticipant.JOINED).count()
+    
+    def get_is_full(self, obj):
+        """Check if room is full."""
+        return obj.is_full()
+
+
+class RoomDetailSerializer(serializers.ModelSerializer):
+    """Detailed serializer for Room."""
+    host_email = serializers.EmailField(source='host.email', read_only=True)
+    host_name = serializers.SerializerMethodField()
+    exam = ExamSerializer(source='exam_id', read_only=True)
+    participants = RoomParticipantSerializer(many=True, read_only=True)
+    participant_count = serializers.SerializerMethodField()
+    questions_count = serializers.SerializerMethodField()
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    privacy_display = serializers.CharField(source='get_privacy_display', read_only=True)
+    subject_mode_display = serializers.CharField(source='get_subject_mode_display', read_only=True)
+    difficulty_display = serializers.CharField(source='get_difficulty_display', read_only=True)
+    question_type_mix_display = serializers.CharField(source='get_question_type_mix_display', read_only=True)
+    randomization_mode_display = serializers.CharField(source='get_randomization_mode_display', read_only=True)
+    is_full = serializers.SerializerMethodField()
+    can_be_edited = serializers.SerializerMethodField()
+    is_host = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Room
+        fields = [
+            'id',
+            'code',
+            'host',
+            'host_email',
+            'host_name',
+            'exam',
+            'exam_id',
+            'subject_mode',
+            'subject_mode_display',
+            'subjects',
+            'number_of_questions',
+            'time_per_question',
+            'duration',
+            'time_buffer',
+            'difficulty',
+            'difficulty_display',
+            'question_types',
+            'question_type_mix',
+            'question_type_mix_display',
+            'randomization_mode',
+            'randomization_mode_display',
+            'privacy',
+            'privacy_display',
+            'participant_limit',
+            'participant_count',
+            'is_full',
+            'allow_pause',
+            'start_time',
+            'status',
+            'status_display',
+            'participants',
+            'questions_count',
+            'can_be_edited',
+            'is_host',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = [
+            'id', 'code', 'host', 'duration', 'status', 'created_at', 'updated_at',
+            'participant_count', 'questions_count', 'is_full', 'can_be_edited', 'is_host'
+        ]
+    
+    def get_host_name(self, obj):
+        """Get host's full name or email."""
+        if obj.host.first_name or obj.host.last_name:
+            return f"{obj.host.first_name or ''} {obj.host.last_name or ''}".strip()
+        return obj.host.email
+    
+    def get_participant_count(self, obj):
+        """Get count of active participants."""
+        return obj.participants.filter(status=RoomParticipant.JOINED).count()
+    
+    def get_questions_count(self, obj):
+        """Get count of questions in room."""
+        return obj.room_questions.count()
+    
+    def get_is_full(self, obj):
+        """Check if room is full."""
+        return obj.is_full()
+    
+    def get_can_be_edited(self, obj):
+        """Check if room can be edited."""
+        return obj.can_be_edited()
+    
+    def get_is_host(self, obj):
+        """Check if current user is the host."""
+        request = self.context.get('request')
+        if request and request.user:
+            return obj.host == request.user
+        return False
+
+
+class RoomJoinSerializer(serializers.Serializer):
+    """Serializer for joining a room."""
+    code = serializers.CharField(max_length=10, required=True)
+    password = serializers.CharField(required=False, allow_blank=True)
+    
+    def validate(self, attrs):
+        """Validate join request."""
+        code = attrs.get('code', '').upper()
+        room = Room.objects.filter(code=code).first()
+        
+        if not room:
+            raise serializers.ValidationError({
+                'code': 'Invalid room code.'
+            })
+        
+        # Check if room is full
+        if room.is_full():
+            raise serializers.ValidationError({
+                'code': 'Room is full.'
+            })
+        
+        # Check if test already started
+        if room.status != Room.Status.WAITING:
+            raise serializers.ValidationError({
+                'code': f'Room is {room.get_status_display().lower()}. Cannot join.'
+            })
+        
+        # Validate password for private rooms
+        if room.privacy == Room.PRIVATE:
+            password = attrs.get('password', '')
+            if not password:
+                raise serializers.ValidationError({
+                    'password': 'Password is required for private rooms.'
+                })
+            
+            from django.contrib.auth.hashers import check_password
+            if not check_password(password, room.password_hash):
+                raise serializers.ValidationError({
+                    'password': 'Incorrect password.'
+                })
+        
+        attrs['room'] = room
+        return attrs
 

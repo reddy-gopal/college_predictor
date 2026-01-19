@@ -18,7 +18,8 @@ import random
 
 from .models import (
     Exam, MockTest, Question, DifficultyLevel, StudentProfile,
-    TestAttempt, StudentAnswer, MistakeNotebook, StudyGuild, XPLog, Leaderboard, DailyFocus
+    TestAttempt, StudentAnswer, MistakeNotebook, StudyGuild, XPLog, Leaderboard, DailyFocus,
+    Room, RoomParticipant, RoomQuestion, ParticipantAttempt
 )
 from .serializers import (
     ExamSerializer,
@@ -33,6 +34,14 @@ from .serializers import (
     XPLogSerializer,
     LeaderboardSerializer,
     DailyFocusSerializer,
+    RoomCreateSerializer, RoomListSerializer, RoomDetailSerializer, RoomJoinSerializer,
+    RoomParticipantSerializer,
+    RoomQuestionSerializer,
+    ParticipantAttemptSerializer, ParticipantAttemptCreateSerializer,
+)
+from .room_services import (
+    validate_question_pool, generate_room_questions,
+    randomize_questions_for_participant, calculate_participant_score
 )
 
 
@@ -642,6 +651,53 @@ class TestAttemptViewSet(viewsets.ModelViewSet):
         answers = attempt.answers.all().select_related('question').order_by('question__question_number')
         serializer = StudentAnswerSerializer(answers, many=True)
         return Response(serializer.data)
+    
+    @action(detail=True, methods=['get'], url_path='unattempted')
+    def unattempted(self, request, pk=None):
+        """Get unattempted questions for this test attempt."""
+        attempt = self.get_object()
+        
+        user = self.request.user
+        if attempt.student.user != user and not user.is_staff:
+            return Response(
+                {'detail': 'You do not have permission to view these questions.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Get all questions from the mock test
+        mock_test = attempt.mock_test
+        if not mock_test:
+            return Response({
+                'detail': 'Mock test not found for this attempt.'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Get all questions for this mock test
+        all_questions = mock_test.questions.all().order_by('question_number')
+        
+        # Get all attempted question IDs
+        attempted_question_ids = set(
+            attempt.answers.values_list('question_id', flat=True)
+        )
+        
+        # Find unattempted questions
+        unattempted_data = []
+        for question in all_questions:
+            if question.id not in attempted_question_ids:
+                unattempted_data.append({
+                    'question_number': question.question_number,
+                    'question': QuestionSerializer(question).data,
+                    'correct_option': question.correct_option,
+                    'marks': question.marks,
+                })
+        
+        # Sort by question number
+        unattempted_data.sort(key=lambda x: x['question_number'])
+        
+        return Response({
+            'attempt_id': attempt.id,
+            'total_unattempted': len(unattempted_data),
+            'unattempted_questions': unattempted_data
+        })
 
 
 class StudentAnswerViewSet(viewsets.ModelViewSet):
@@ -1893,3 +1949,848 @@ def generate_custom_test(request):
         'test_id': mock_test.id,
         'attempt_id': attempt.id
     }, status=status.HTTP_201_CREATED)
+
+
+class RoomViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Room (Tournament-style test rooms).
+    
+    Endpoints:
+    - POST /api/rooms/ - Create room
+    - GET /api/rooms/ - List rooms
+    - GET /api/rooms/{code}/ - Get room details
+    - POST /api/rooms/join/ - Join a room
+    - GET /api/rooms/{code}/participants/ - Get participants
+    - POST /api/rooms/{code}/kick/{user_id}/ - Kick participant (host only)
+    - POST /api/rooms/{code}/start/ - Start test (host only)
+    - POST /api/rooms/{code}/end/ - End test (host only)
+    - GET /api/rooms/{code}/questions/ - Get questions for participant
+    """
+    queryset = Room.objects.all()
+    permission_classes = [IsAuthenticated]
+    
+    def get_serializer_class(self):
+        """Return appropriate serializer based on action."""
+        if self.action == 'create':
+            return RoomCreateSerializer
+        elif self.action == 'list':
+            return RoomListSerializer
+        elif self.action == 'retrieve':
+            return RoomDetailSerializer
+        return RoomListSerializer
+    
+    def get_queryset(self):
+        """Filter rooms based on user and status."""
+        queryset = Room.objects.all()
+        
+        # Filter by status
+        status_filter = self.request.query_params.get('status')
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        
+        # Exclude by status (e.g., exclude completed rooms from other filters)
+        exclude_status = self.request.query_params.get('exclude_status')
+        if exclude_status:
+            queryset = queryset.exclude(status=exclude_status)
+        
+        # Filter by exam
+        exam_id = self.request.query_params.get('exam_id')
+        if exam_id:
+            queryset = queryset.filter(exam_id=exam_id)
+        
+        # Filter by privacy
+        privacy = self.request.query_params.get('privacy')
+        if privacy:
+            queryset = queryset.filter(privacy=privacy)
+        
+        return queryset.order_by('-created_at')
+    
+    @action(detail=False, methods=['get'], url_path='my-active-room')
+    def my_active_room(self, request):
+        """Get the current user's active room (if they're a participant)."""
+        # Find rooms where user is a participant and room is waiting or active
+        participant = RoomParticipant.objects.filter(
+            user=request.user,
+            status=RoomParticipant.JOINED
+        ).select_related('room').filter(
+            room__status__in=[Room.Status.WAITING, Room.Status.ACTIVE]
+        ).order_by('-room__created_at').first()
+        
+        if not participant:
+            return Response({
+                'has_active_room': False,
+                'room': None
+            })
+        
+        room = participant.room
+        serializer = RoomListSerializer(room, context={'request': request})
+        
+        return Response({
+            'has_active_room': True,
+            'room': serializer.data,
+            'room_code': room.code
+        })
+    
+    def create(self, request, *args, **kwargs):
+        """Create a new room."""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        # Validate question pool before creating
+        room_data = serializer.validated_data.copy()
+        room_data['host'] = request.user
+        
+        # Remove 'password' field - it's not a model field, only used in serializer
+        # The model uses 'password_hash' which is set in serializer.create()
+        room_data.pop('password', None)
+        
+        # The serializer uses 'exam' with source='exam_id', so validated_data has 'exam'
+        # but the model field is 'exam_id'. Convert it.
+        if 'exam' in room_data:
+            exam_obj = room_data.pop('exam')
+            room_data['exam_id'] = exam_obj
+        
+        # Create temporary room for validation
+        temp_room = Room(**room_data)
+        validation = validate_question_pool(temp_room)
+        
+        if not validation['valid']:
+            return Response({
+                'detail': validation['message'],
+                'available_count': validation['available_count'],
+                'requested_count': validation['requested_count'],
+                'suggestion': 'Consider reducing number_of_questions or changing subject/difficulty filters'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Create room
+        room = serializer.save()
+        
+        # Generate questions for the room
+        success, message, count = generate_room_questions(room)
+        if not success:
+            room.delete()
+            return Response({
+                'detail': f'Failed to generate questions: {message}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Add host as participant
+        RoomParticipant.objects.create(
+            room=room,
+            user=request.user,
+            status=RoomParticipant.JOINED
+        )
+        
+        response_serializer = RoomDetailSerializer(room, context={'request': request})
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+    
+    def retrieve(self, request, *args, **kwargs):
+        """Get room details by code."""
+        code = kwargs.get('pk', '').upper()
+        room = Room.objects.filter(code=code).first()
+        
+        if not room:
+            return Response({
+                'detail': 'Room not found.'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        serializer = self.get_serializer(room, context={'request': request})
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'], url_path='join')
+    def join(self, request, pk=None):
+        """Join a room."""
+        code = pk.upper() if pk else request.data.get('code', '').upper()
+        
+        join_serializer = RoomJoinSerializer(data=request.data)
+        join_serializer.is_valid(raise_exception=True)
+        
+        room = join_serializer.validated_data['room']
+        
+        # Check if user already joined
+        existing_participant = RoomParticipant.objects.filter(
+            room=room,
+            user=request.user,
+            status=RoomParticipant.JOINED
+        ).first()
+        
+        if existing_participant:
+            return Response({
+                'detail': 'You have already joined this room.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Create participant
+        participant = RoomParticipant.objects.create(
+            room=room,
+            user=request.user,
+            status=RoomParticipant.JOINED
+        )
+        
+        serializer = RoomParticipantSerializer(participant)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    
+    @action(detail=True, methods=['get'], url_path='participants')
+    def participants(self, request, pk=None):
+        """Get list of participants in a room."""
+        code = pk.upper() if pk else ''
+        room = Room.objects.filter(code=code).first()
+        
+        if not room:
+            return Response({
+                'detail': 'Room not found.'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Check if user is a participant or host
+        is_host = room.host == request.user
+        is_participant = room.participants.filter(
+            user=request.user,
+            status=RoomParticipant.JOINED
+        ).exists()
+        
+        # Allow access if user is host OR participant OR room is active/completed
+        if not is_host and not is_participant and room.status == Room.Status.WAITING:
+            return Response({
+                'detail': 'You must be a participant or host to view participants.'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        participants = room.participants.filter(status=RoomParticipant.JOINED)
+        serializer = RoomParticipantSerializer(participants, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'], url_path='kick/(?P<user_id>[^/.]+)')
+    def kick(self, request, pk=None, user_id=None):
+        """Kick a participant from the room (host only)."""
+        code = pk.upper() if pk else ''
+        room = Room.objects.filter(code=code).first()
+        
+        if not room:
+            return Response({
+                'detail': 'Room not found.'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Only host can kick
+        if room.host != request.user:
+            return Response({
+                'detail': 'Only the host can kick participants.'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Cannot kick if test has started
+        if room.status != Room.Status.WAITING:
+            return Response({
+                'detail': 'Cannot kick participants after test has started.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Find participant
+        try:
+            from accounts.models import CustomUser
+            user = CustomUser.objects.get(id=user_id)
+            participant = RoomParticipant.objects.get(
+                room=room,
+                user=user,
+                status=RoomParticipant.JOINED
+            )
+        except (CustomUser.DoesNotExist, RoomParticipant.DoesNotExist):
+            return Response({
+                'detail': 'Participant not found.'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Cannot kick host
+        if participant.user == room.host:
+            return Response({
+                'detail': 'Cannot kick the host.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Update status
+        participant.status = RoomParticipant.KICKED
+        participant.save()
+        
+        return Response({
+            'detail': f'Participant {participant.user.email} has been kicked.'
+        })
+    
+    @action(detail=True, methods=['post'], url_path='start')
+    def start(self, request, pk=None):
+        """Start the test (host only)."""
+        code = pk.upper() if pk else ''
+        room = Room.objects.filter(code=code).first()
+        
+        if not room:
+            return Response({
+                'detail': 'Room not found.'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Only host can start
+        if room.host != request.user:
+            return Response({
+                'detail': 'Only the host can start the test.'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Check if already started
+        if room.status != Room.Status.WAITING:
+            return Response({
+                'detail': f'Room is already {room.get_status_display().lower()}.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if questions are generated
+        if room.room_questions.count() == 0:
+            return Response({
+                'detail': 'No questions generated for this room. Please regenerate questions.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if there are participants
+        if room.participants.filter(status=RoomParticipant.JOINED).count() == 0:
+            return Response({
+                'detail': 'Cannot start test with no participants.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Start the test
+        room.status = Room.Status.ACTIVE
+        room.start_time = timezone.now()
+        room.save()
+        
+        serializer = RoomDetailSerializer(room, context={'request': request})
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'], url_path='end')
+    def end(self, request, pk=None):
+        """End the test (host only)."""
+        code = pk.upper() if pk else ''
+        room = Room.objects.filter(code=code).first()
+        
+        if not room:
+            return Response({
+                'detail': 'Room not found.'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Only host can end
+        if room.host != request.user:
+            return Response({
+                'detail': 'Only the host can end the test.'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Check if active
+        if room.status != Room.Status.ACTIVE:
+            return Response({
+                'detail': f'Room is not active. Current status: {room.get_status_display()}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # End the test
+        room.status = Room.Status.COMPLETED
+        room.save()
+        
+        serializer = RoomDetailSerializer(room, context={'request': request})
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['get'], url_path='questions')
+    def questions(self, request, pk=None):
+        """Get questions for the current participant."""
+        code = pk.upper() if pk else ''
+        room = Room.objects.filter(code=code).first()
+        
+        if not room:
+            return Response({
+                'detail': 'Room not found.'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Check if user is a participant
+        participant = RoomParticipant.objects.filter(
+            room=room,
+            user=request.user,
+            status=RoomParticipant.JOINED
+        ).first()
+        
+        if not participant:
+            return Response({
+                'detail': 'You are not a participant in this room.'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Check if test has started
+        if room.status != Room.Status.ACTIVE:
+            return Response({
+                'detail': f'Test has not started yet. Current status: {room.get_status_display()}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get randomized questions for this participant
+        questions = randomize_questions_for_participant(participant)
+        
+        # Serialize questions
+        question_data = []
+        for rq in questions:
+            question = rq.question
+            question_num = getattr(rq, '_display_number', rq.question_number)
+            
+            # Get participant's attempt if exists
+            attempt = ParticipantAttempt.objects.filter(
+                participant=participant,
+                room_question=rq
+            ).first()
+            
+            question_data.append({
+                'room_question_id': rq.id,
+                'question_number': question_num,
+                'question': QuestionSerializer(question).data,
+                'attempt': ParticipantAttemptSerializer(attempt).data if attempt else None,
+                'time_per_question_minutes': room.time_per_question,
+                'total_duration_minutes': room.duration + room.time_buffer,
+            })
+        
+        # Calculate remaining time based on room start_time
+        # This ensures all participants see the same remaining time based on when the room actually started
+        total_duration_seconds = (room.duration + room.time_buffer) * 60
+        elapsed_seconds = (timezone.now() - room.start_time).total_seconds()
+        remaining_seconds = max(0, total_duration_seconds - elapsed_seconds)
+        
+        return Response({
+            'room_code': room.code,
+            'total_questions': len(question_data),
+            'time_per_question': room.time_per_question,
+            'total_duration': room.duration + room.time_buffer,
+            'start_time': room.start_time.isoformat() if room.start_time else None,
+            'remaining_seconds': int(remaining_seconds),
+            'questions': question_data
+        })
+    
+    @action(detail=True, methods=['get'], url_path='test-summary')
+    def test_summary(self, request, pk=None):
+        """Get test summary for an existing room."""
+        code = pk.upper() if pk else ''
+        room = Room.objects.filter(code=code).first()
+        
+        if not room:
+            return Response({
+                'detail': 'Room not found.'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Validate question pool
+        validation = validate_question_pool(room)
+        
+        return Response({
+            'summary': {
+                'total_questions': room.number_of_questions,
+                'time_per_question': room.time_per_question,
+                'total_duration_minutes': room.duration,
+                'subject_mode': room.subject_mode,
+                'subjects': room.subjects if room.subject_mode == Room.SubjectMode.SPECIFIC else None,
+                'difficulty': room.difficulty,
+                'question_type_mix': room.question_type_mix,
+                'question_types': room.question_types if room.question_types else None,
+            },
+            'validation': validation,
+            'suggestions': {
+                'auto_adjust_available': not validation['valid'],
+                'available_count': validation['available_count'],
+                'requested_count': validation['requested_count'],
+            }
+        })
+    
+    @action(detail=True, methods=['get'], url_path='submission-status')
+    def submission_status(self, request, pk=None):
+        """Check submission status for all participants."""
+        code = pk.upper() if pk else ''
+        room = Room.objects.filter(code=code).first()
+        
+        if not room:
+            return Response({
+                'detail': 'Room not found.'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Check status for active or completed rooms
+        if room.status not in [Room.Status.ACTIVE, Room.Status.COMPLETED]:
+            return Response({
+                'detail': f'Test is not active or completed. Current status: {room.get_status_display()}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        participants = room.participants.filter(status=RoomParticipant.JOINED)
+        total_questions = room.room_questions.count()
+        
+        submission_data = []
+        submitted_count = 0
+        
+        for participant in participants:
+            # Count how many questions this participant has answered
+            answered_count = participant.attempts.count()
+            has_submitted_all = answered_count >= total_questions
+            
+            if has_submitted_all:
+                submitted_count += 1
+            
+            submission_data.append({
+                'participant_id': participant.id,
+                'user_email': participant.user.email,
+                'user_name': f"{participant.user.first_name or ''} {participant.user.last_name or ''}".strip() or participant.user.email,
+                'answered_count': answered_count,
+                'total_questions': total_questions,
+                'has_submitted_all': has_submitted_all,
+            })
+        
+        all_submitted = submitted_count == participants.count()
+        
+        # Auto-complete room if all participants have submitted and room is still active
+        if all_submitted and room.status == Room.Status.ACTIVE:
+            room.status = Room.Status.COMPLETED
+            room.save()
+        
+        return Response({
+            'room_code': room.code,
+            'total_participants': participants.count(),
+            'submitted_count': submitted_count,
+            'pending_count': participants.count() - submitted_count,
+            'all_submitted': all_submitted or room.status == Room.Status.COMPLETED,
+            'room_status': room.status,
+            'submissions': submission_data
+        })
+    
+    @action(detail=True, methods=['get'], url_path='leaderboard')
+    def leaderboard(self, request, pk=None):
+        """Get leaderboard for completed room."""
+        code = pk.upper() if pk else ''
+        room = Room.objects.filter(code=code).first()
+        
+        if not room:
+            return Response({
+                'detail': 'Room not found.'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Only show leaderboard if test is completed
+        if room.status != Room.Status.COMPLETED:
+            return Response({
+                'detail': 'Leaderboard is only available after test completion.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Calculate scores for all participants
+        participants = room.participants.filter(status=RoomParticipant.JOINED)
+        leaderboard_data = []
+        
+        for participant in participants:
+            score_data = calculate_participant_score(participant)
+            
+            # Get total time taken (sum of all time_spent_seconds)
+            total_time_seconds = sum(
+                attempt.time_spent_seconds 
+                for attempt in participant.attempts.all()
+            )
+            
+            leaderboard_data.append({
+                'participant_id': participant.id,
+                'user_email': participant.user.email,
+                'user_name': f"{participant.user.first_name or ''} {participant.user.last_name or ''}".strip() or participant.user.email,
+                'total_score': score_data['total_score'],
+                'total_marks': score_data['total_marks'],
+                'percentage': score_data['percentage'],
+                'correct_count': score_data['correct_count'],
+                'wrong_count': score_data['wrong_count'],
+                'unanswered_count': score_data['unanswered_count'],
+                'total_time_seconds': total_time_seconds,
+                'total_time_minutes': round(total_time_seconds / 60, 2),
+            })
+        
+        # Sort by score (descending), then by time (ascending - faster is better)
+        leaderboard_data.sort(key=lambda x: (-x['total_score'], x['total_time_seconds']))
+        
+        # Add rank
+        for idx, entry in enumerate(leaderboard_data, start=1):
+            entry['rank'] = idx
+        
+        return Response({
+            'room_code': room.code,
+            'room_title': f"Room {room.code}",
+            'total_participants': len(leaderboard_data),
+            'leaderboard': leaderboard_data
+        })
+    
+    @action(detail=True, methods=['get'], url_path='review')
+    def review(self, request, pk=None):
+        """Get wrong answers for the current user to review."""
+        code = pk.upper() if pk else ''
+        room = Room.objects.filter(code=code).first()
+        
+        if not room:
+            return Response({
+                'detail': 'Room not found.'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Check if user is a participant
+        participant = RoomParticipant.objects.filter(
+            room=room,
+            user=request.user,
+            status=RoomParticipant.JOINED
+        ).first()
+        
+        if not participant:
+            return Response({
+                'detail': 'You are not a participant in this room.'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Only show review if test is completed
+        if room.status != Room.Status.COMPLETED:
+            return Response({
+                'detail': 'Review is only available after test completion.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get all wrong answers for this participant
+        wrong_attempts = participant.attempts.filter(is_correct=False)
+        
+        review_data = []
+        for attempt in wrong_attempts:
+            question = attempt.room_question.question
+            room_question = attempt.room_question
+            
+            review_data.append({
+                'attempt_id': attempt.id,
+                'question_number': room_question.question_number,
+                'question': QuestionSerializer(question).data,
+                'selected_option': attempt.selected_option,
+                'answer_text': attempt.answer_text,
+                'correct_option': question.correct_option,
+                'marks_obtained': attempt.marks_obtained,
+                'time_spent_seconds': attempt.time_spent_seconds,
+            })
+        
+        # Sort by question number
+        review_data.sort(key=lambda x: x['question_number'])
+        
+        return Response({
+            'room_code': room.code,
+            'total_wrong': len(review_data),
+            'wrong_answers': review_data
+        })
+    
+    @action(detail=True, methods=['get'], url_path='unattempted')
+    def unattempted(self, request, pk=None):
+        """Get unattempted questions for the current user to review."""
+        code = pk.upper() if pk else ''
+        room = Room.objects.filter(code=code).first()
+        
+        if not room:
+            return Response({
+                'detail': 'Room not found.'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Check if user is a participant
+        participant = RoomParticipant.objects.filter(
+            room=room,
+            user=request.user,
+            status=RoomParticipant.JOINED
+        ).first()
+        
+        if not participant:
+            return Response({
+                'detail': 'You are not a participant in this room.'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Only show unattempted if test is completed
+        if room.status != Room.Status.COMPLETED:
+            return Response({
+                'detail': 'Unattempted questions are only available after test completion.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get all room questions
+        room_questions = room.room_questions.all().order_by('question_number')
+        
+        # Get all attempted question IDs for this participant
+        attempted_question_ids = set(
+            participant.attempts.values_list('room_question_id', flat=True)
+        )
+        
+        # Find unattempted questions
+        unattempted_data = []
+        for room_question in room_questions:
+            if room_question.id not in attempted_question_ids:
+                question = room_question.question
+                
+                unattempted_data.append({
+                    'question_number': room_question.question_number,
+                    'question': QuestionSerializer(question).data,
+                    'correct_option': question.correct_option,
+                    'marks': question.marks,
+                })
+        
+        # Sort by question number
+        unattempted_data.sort(key=lambda x: x['question_number'])
+        
+        return Response({
+            'room_code': room.code,
+            'total_unattempted': len(unattempted_data),
+            'unattempted_questions': unattempted_data
+        })
+
+
+class ParticipantAttemptViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for ParticipantAttempt (participant answers).
+    
+    Endpoints:
+    - POST /api/attempts/submit/ - Submit answer for a question
+    """
+    queryset = ParticipantAttempt.objects.all()
+    serializer_class = ParticipantAttemptSerializer
+    permission_classes = [IsAuthenticated]
+    
+    @action(detail=False, methods=['post'], url_path='submit')
+    def submit(self, request):
+        """Submit an answer for a question."""
+        serializer = ParticipantAttemptCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        room_question_id = serializer.validated_data['room_question'].id
+        room_question = RoomQuestion.objects.get(id=room_question_id)
+        room = room_question.room
+        
+        # Check if user is a participant
+        participant = RoomParticipant.objects.filter(
+            room=room,
+            user=request.user,
+            status=RoomParticipant.JOINED
+        ).first()
+        
+        if not participant:
+            return Response({
+                'detail': 'You are not a participant in this room.'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Check if test is active
+        if room.status != Room.Status.ACTIVE:
+            return Response({
+                'detail': f'Test is not active. Current status: {room.get_status_display()}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get or create attempt
+        attempt, created = ParticipantAttempt.objects.get_or_create(
+            participant=participant,
+            room_question=room_question,
+            defaults={
+                'selected_option': serializer.validated_data.get('selected_option'),
+                'answer_text': serializer.validated_data.get('answer_text'),
+                'time_spent_seconds': serializer.validated_data.get('time_spent_seconds', 0),
+                'started_at': serializer.validated_data.get('started_at'),
+                'submitted_at': timezone.now(),
+            }
+        )
+        
+        if not created:
+            # Update existing attempt
+            attempt.selected_option = serializer.validated_data.get('selected_option', attempt.selected_option)
+            attempt.answer_text = serializer.validated_data.get('answer_text', attempt.answer_text)
+            attempt.time_spent_seconds = serializer.validated_data.get('time_spent_seconds', attempt.time_spent_seconds)
+            if not attempt.started_at:
+                attempt.started_at = serializer.validated_data.get('started_at')
+            attempt.submitted_at = timezone.now()
+            attempt.save()
+        
+        # Calculate correctness and marks
+        question = room_question.question
+        is_correct = False
+        marks_obtained = 0.0
+        
+        if question.question_type == Question.QuestionType.MCQ:
+            # MCQ: Compare selected option with correct option
+            selected = attempt.selected_option
+            if selected and selected.strip() and selected.upper().strip() == question.correct_option.upper().strip():
+                is_correct = True
+                marks_obtained = question.marks
+            elif selected and selected.strip():
+                # Wrong answer: apply negative marks
+                marks_obtained = -question.negative_marks
+            else:
+                # Unanswered: 0 marks
+                is_correct = None
+                marks_obtained = 0.0
+        else:
+            # Integer/Numerical: Compare answer text
+            answer_text = attempt.answer_text
+            if not answer_text or not answer_text.strip():
+                # Unanswered: 0 marks
+                is_correct = None
+                marks_obtained = 0.0
+            else:
+                try:
+                    # Try to compare as numbers
+                    answer_float = float(answer_text.strip())
+                    correct_float = float(question.correct_option.strip())
+                    if abs(answer_float - correct_float) < 0.01:  # Allow small floating point differences
+                        is_correct = True
+                        marks_obtained = question.marks
+                    else:
+                        is_correct = False
+                        marks_obtained = -question.negative_marks
+                except (ValueError, AttributeError):
+                    # Text comparison
+                    if answer_text.strip().upper() == question.correct_option.strip().upper():
+                        is_correct = True
+                        marks_obtained = question.marks
+                    else:
+                        is_correct = False
+                        marks_obtained = -question.negative_marks
+        
+        # Update attempt
+        attempt.is_correct = is_correct
+        attempt.marks_obtained = marks_obtained
+        attempt.save()
+        
+        response_serializer = ParticipantAttemptSerializer(attempt)
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def preview_room_test_summary(request):
+    """
+    Preview test summary before creating a room.
+    This endpoint validates room configuration and returns a summary without requiring a room code.
+    """
+    exam_id = request.query_params.get('exam_id')
+    subject_mode = request.query_params.get('subject_mode', Room.SubjectMode.RANDOM)
+    subjects = request.query_params.getlist('subjects') or []
+    number_of_questions = int(request.query_params.get('number_of_questions', 10))
+    time_per_question = float(request.query_params.get('time_per_question', 2.0))
+    difficulty = request.query_params.get('difficulty', Room.Difficulty.MIXED)
+    question_types = request.query_params.getlist('question_types') or []
+    question_type_mix = request.query_params.get('question_type_mix', Room.QuestionTypeMix.MIXED)
+    
+    if not exam_id:
+        return Response({
+            'detail': 'exam_id is required.'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        exam = Exam.objects.get(id=exam_id)
+    except Exam.DoesNotExist:
+        return Response({
+            'detail': 'Exam not found.'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    # Create temporary room for validation (don't save to DB)
+    temp_room = Room(
+        exam_id=exam,
+        subject_mode=subject_mode,
+        subjects=subjects if subjects else None,
+        number_of_questions=number_of_questions,
+        time_per_question=time_per_question,
+        difficulty=difficulty,
+        question_types=question_types if question_types else None,
+        question_type_mix=question_type_mix,
+    )
+    
+    # Validate question pool
+    validation = validate_question_pool(temp_room)
+    
+    # Calculate duration
+    total_duration = int(number_of_questions * time_per_question)
+    
+    return Response({
+        'summary': {
+            'total_questions': number_of_questions,
+            'time_per_question': time_per_question,
+            'total_duration_minutes': total_duration,
+            'subject_mode': subject_mode,
+            'subjects': subjects if subject_mode == Room.SubjectMode.SPECIFIC else None,
+            'difficulty': difficulty,
+            'question_type_mix': question_type_mix,
+            'question_types': question_types if question_types else None,
+        },
+        'validation': validation,
+        'suggestions': {
+            'auto_adjust_available': not validation['valid'],
+            'available_count': validation['available_count'],
+            'requested_count': validation['requested_count'],
+        }
+    })

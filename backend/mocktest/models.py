@@ -15,6 +15,7 @@ from django.db import models
 from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
+from accounts.models import CustomUser
 
 
 class PhoneOTP(models.Model):
@@ -967,3 +968,360 @@ class DailyFocus(models.Model):
     
     def __str__(self):
         return f"{self.student.user.email} - {self.date} ({self.get_status_display()})"
+
+
+
+class Room(models.Model):
+    """
+    Tournament-style test room where multiple participants take the same test.
+    """
+    PUBLIC = "public"
+    PRIVATE = "private"
+    ROOM_PRIVACY_CHOICES = [
+        (PUBLIC, "Public"),
+        (PRIVATE, "Private"),
+    ]
+
+    class SubjectMode(models.TextChoices):
+        SPECIFIC = "specific", "Specific Subjects"
+        RANDOM = "random", "Random"
+
+    class Difficulty(models.TextChoices):
+        EASY = "easy", "Easy"
+        MEDIUM = "medium", "Medium"
+        HARD = "hard", "Hard"
+        MIXED = "mixed", "Mixed"
+
+    class QuestionTypeMix(models.TextChoices):
+        MCQ = "mcq", "MCQ Only"
+        INTEGER = "integer", "Integer Type Only"
+        NUMERICAL = "numerical", "Numerical Type Only"
+        MIXED = "mixed", "Mixed"
+
+    class RandomizationMode(models.TextChoices):
+        NONE = "none", "No Randomization"
+        QUESTION_ORDER = "question_order", "Randomize Question Order"
+        QUESTION_AND_OPTIONS = "question_and_options", "Randomize Questions & Options"
+
+    class Status(models.TextChoices):
+        WAITING = "waiting", "Waiting"
+        ACTIVE = "active", "Active"
+        COMPLETED = "completed", "Completed"
+        LOCKED = "locked", "Locked"
+
+    code = models.CharField(max_length=10, unique=True, db_index=True, verbose_name="Room Code")
+    host = models.ForeignKey(
+        CustomUser,
+        on_delete=models.CASCADE,
+        related_name="hosted_rooms",
+        verbose_name="Host"
+    )
+    exam_id = models.ForeignKey(
+        Exam,
+        on_delete=models.CASCADE,
+        related_name="rooms",
+        verbose_name="Exam"
+    )
+    
+    # Subject selection
+    subject_mode = models.CharField(
+        max_length=20,
+        choices=SubjectMode.choices,
+        default=SubjectMode.RANDOM,
+        verbose_name="Subject Selection Mode"
+    )
+    subjects = models.JSONField(
+        default=list,
+        blank=True,
+        null=True,
+        help_text="List of subjects/topics (used when subject_mode='specific')",
+        verbose_name="Selected Subjects"
+    )
+    
+    # Test configuration
+    number_of_questions = models.PositiveIntegerField(
+        default=10,
+        verbose_name="Number of Questions"
+    )
+    time_per_question = models.FloatField(
+        default=2.0,
+        validators=[MinValueValidator(0.1)],
+        help_text="Time per question in minutes (supports decimals like 1.5)",
+        verbose_name="Time Per Question (minutes)"
+    )
+    duration = models.PositiveIntegerField(
+        default=20,
+        help_text="Total duration in minutes (auto-calculated: number_of_questions × time_per_question)",
+        verbose_name="Total Duration (minutes)"
+    )
+    time_buffer = models.PositiveIntegerField(
+        default=2,
+        help_text="Additional time buffer in minutes (1-2 minutes recommended)",
+        verbose_name="Time Buffer (minutes)"
+    )
+    
+    # Question filtering
+    difficulty = models.CharField(
+        max_length=20,
+        choices=Difficulty.choices,
+        default=Difficulty.MIXED,
+        verbose_name="Difficulty Level"
+    )
+    question_types = models.JSONField(
+        default=list,
+        blank=True,
+        null=True,
+        help_text="List of question types to include (MCQ, INTEGER, NUMERICAL, etc.)",
+        verbose_name="Question Types"
+    )
+    question_type_mix = models.CharField(
+        max_length=20,
+        choices=QuestionTypeMix.choices,
+        default=QuestionTypeMix.MIXED,
+        verbose_name="Question Type Mix"
+    )
+    
+    # Randomization
+    randomization_mode = models.CharField(
+        max_length=30,
+        choices=RandomizationMode.choices,
+        default=RandomizationMode.QUESTION_ORDER,
+        verbose_name="Randomization Mode"
+    )
+    
+    # Room settings
+    privacy = models.CharField(
+        max_length=10,
+        choices=ROOM_PRIVACY_CHOICES,
+        default=PUBLIC,
+        verbose_name="Privacy"
+    )
+    password_hash = models.CharField(
+        max_length=128,
+        blank=True,
+        null=True,
+        verbose_name="Password Hash"
+    )
+    participant_limit = models.PositiveIntegerField(
+        default=0,
+        help_text="0 = unlimited",
+        verbose_name="Participant Limit"
+    )
+    allow_pause = models.BooleanField(
+        default=False,
+        help_text="Allow participants to pause the test",
+        verbose_name="Allow Pause"
+    )
+    
+    # Timing
+    start_time = models.DateTimeField(
+        verbose_name="Start Time"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.WAITING,
+        db_index=True,
+        verbose_name="Status"
+    )
+    
+    # Legacy field (kept for backward compatibility)
+    topics = models.JSONField(blank=True, null=True, verbose_name="Topics")
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Created At")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Updated At")
+
+    class Meta:
+        verbose_name = "Room"
+        verbose_name_plural = "Rooms"
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['code']),
+            models.Index(fields=['status', 'start_time']),
+            models.Index(fields=['host', 'status']),
+        ]
+
+    def save(self, *args, **kwargs):
+        """Auto-calculate duration before saving."""
+        if self.number_of_questions and self.time_per_question:
+            self.duration = int(self.number_of_questions * self.time_per_question)
+        super().save(*args, **kwargs)
+
+    def is_full(self):
+        """Check if room has reached participant limit."""
+        if self.participant_limit == 0:
+            return False
+        active_participants = self.participants.filter(status=RoomParticipant.JOINED).count()
+        return active_participants >= self.participant_limit
+
+    def can_be_edited(self):
+        """Check if room configuration can be edited."""
+        return self.status == self.Status.WAITING and self.participants.filter(status=RoomParticipant.JOINED).count() == 0
+
+    def __str__(self):
+        return f"{self.code} ({self.get_privacy_display()}) - {self.get_status_display()}"
+
+class RoomParticipant(models.Model):
+    """
+    Participant in a test room.
+    """
+    JOINED = "joined"
+    LEFT = "left"
+    KICKED = "kicked"
+
+    room = models.ForeignKey(
+        Room,
+        on_delete=models.CASCADE,
+        related_name="participants",
+        verbose_name="Room"
+    )
+    user = models.ForeignKey(
+        CustomUser,
+        on_delete=models.CASCADE,
+        related_name="joined_rooms",
+        verbose_name="User"
+    )
+    joined_at = models.DateTimeField(auto_now_add=True, verbose_name="Joined At")
+    status = models.CharField(
+        max_length=10,
+        choices=[(JOINED, "Joined"), (LEFT, "Left"), (KICKED, "Kicked")],
+        default=JOINED,
+        db_index=True,
+        verbose_name="Status"
+    )
+    randomization_seed = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Random seed for question/option randomization per participant",
+        verbose_name="Randomization Seed"
+    )
+
+    class Meta:
+        verbose_name = "Room Participant"
+        verbose_name_plural = "Room Participants"
+        ordering = ['joined_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['room', 'user'],
+                condition=models.Q(status='joined'),
+                name='unique_active_participant_per_room'
+            )
+        ]
+        indexes = [
+            models.Index(fields=['room', 'status']),
+            models.Index(fields=['user', 'status']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.email} in {self.room.code} ({self.get_status_display()})"
+
+
+class RoomQuestion(models.Model):
+    """
+    Questions selected for a room.
+    Stores the questions that will be used in the room test.
+    """
+    room = models.ForeignKey(
+        Room,
+        on_delete=models.CASCADE,
+        related_name="room_questions",
+        verbose_name="Room"
+    )
+    question = models.ForeignKey(
+        Question,
+        on_delete=models.CASCADE,
+        related_name="room_questions",
+        verbose_name="Question"
+    )
+    question_number = models.PositiveIntegerField(
+        verbose_name="Question Number",
+        help_text="Order of question in the room test"
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Created At")
+
+    class Meta:
+        verbose_name = "Room Question"
+        verbose_name_plural = "Room Questions"
+        ordering = ['question_number']
+        unique_together = [['room', 'question_number']]
+        indexes = [
+            models.Index(fields=['room', 'question_number']),
+        ]
+
+    def __str__(self):
+        return f"Room {self.room.code} - Q{self.question_number}"
+
+
+class ParticipantAttempt(models.Model):
+    """
+    Participant's attempt/answers for a room test.
+    Stores answers, timing, and scoring for each participant.
+    """
+    participant = models.ForeignKey(
+        RoomParticipant,
+        on_delete=models.CASCADE,
+        related_name="attempts",
+        verbose_name="Participant"
+    )
+    room_question = models.ForeignKey(
+        RoomQuestion,
+        on_delete=models.CASCADE,
+        related_name="attempts",
+        verbose_name="Room Question"
+    )
+    selected_option = models.CharField(
+        max_length=10,
+        blank=True,
+        null=True,
+        help_text="Selected answer option (A, B, C, D, etc.)",
+        verbose_name="Selected Option"
+    )
+    answer_text = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Text answer for non-MCQ questions",
+        verbose_name="Answer Text"
+    )
+    is_correct = models.BooleanField(
+        null=True,
+        blank=True,
+        help_text="Whether the answer is correct (calculated after submission)",
+        verbose_name="Is Correct"
+    )
+    marks_obtained = models.FloatField(
+        default=0.0,
+        help_text="Marks obtained for this question",
+        verbose_name="Marks Obtained"
+    )
+    time_spent_seconds = models.PositiveIntegerField(
+        default=0,
+        help_text="Time spent on this question in seconds",
+        verbose_name="Time Spent (seconds)"
+    )
+    started_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When participant started answering this question",
+        verbose_name="Started At"
+    )
+    submitted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When participant submitted answer",
+        verbose_name="Submitted At"
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Created At")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Updated At")
+
+    class Meta:
+        verbose_name = "Participant Attempt"
+        verbose_name_plural = "Participant Attempts"
+        ordering = ['room_question__question_number']
+        unique_together = [['participant', 'room_question']]
+        indexes = [
+            models.Index(fields=['participant', 'room_question']),
+            models.Index(fields=['participant', 'is_correct']),
+        ]
+
+    def __str__(self):
+        return f"{self.participant.user.email} - Q{self.room_question.question_number} - {self.room_question.room.code}"

@@ -11,9 +11,74 @@ from django.utils.html import format_html
 from .models import (
     PhoneOTP, DifficultyLevel, MockTest, Question,
     StudentProfile, TestAttempt, StudentAnswer, MistakeNotebook,
-    StudyGuild, XPLog, Leaderboard, Exam
+    StudyGuild, XPLog, Leaderboard, Exam, DailyFocus,
+    Room, RoomParticipant, RoomQuestion, ParticipantAttempt
 )
 
+
+@admin.register(Room)
+class RoomAdmin(admin.ModelAdmin):
+    """Admin for Room model."""
+    list_display = ['code', 'host', 'exam_id', 'topics', 'duration', 'start_time', 'privacy', 'participant_limit', 'status', 'created_at', 'updated_at']
+    list_filter = ['host', 'exam_id', 'topics', 'duration', 'start_time', 'privacy', 'participant_limit', 'status', 'created_at', 'updated_at']
+    search_fields = ['code', 'host__email', 'exam_id__name']
+    readonly_fields = ['created_at', 'updated_at']
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('code', 'host', 'exam_id', 'topics', 'duration', 'start_time', 'privacy', 'participant_limit', 'status')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+@admin.register(RoomParticipant)
+class RoomParticipantAdmin(admin.ModelAdmin):
+    """Admin for RoomParticipant model."""
+    list_display = ['room', 'user', 'status', 'joined_at']
+    list_filter = ['room', 'user', 'status', 'joined_at']
+    search_fields = ['room__code', 'user__email']
+    readonly_fields = ['joined_at']
+    date_hierarchy = 'joined_at'
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('room', 'user', 'status')
+        }),
+        ('Timestamps', {
+            'fields': ('joined_at',),
+            'classes': ('collapse',)
+        }),
+    )
+
+
+@admin.register(RoomQuestion)
+class RoomQuestionAdmin(admin.ModelAdmin):
+    """Admin for RoomQuestion model."""
+    list_display = ['room', 'question_number', 'question', 'created_at']
+    list_filter = ['room', 'created_at']
+    search_fields = ['room__code', 'question__text', 'question__subject']
+    readonly_fields = ['created_at']
+    ordering = ['room', 'question_number']
+
+
+@admin.register(ParticipantAttempt)
+class ParticipantAttemptAdmin(admin.ModelAdmin):
+    """Admin for ParticipantAttempt model."""
+    list_display = ['participant', 'room_question', 'is_correct', 'marks_obtained', 'time_spent_seconds', 'submitted_at']
+    list_filter = ['is_correct', 'participant__room', 'submitted_at']
+    search_fields = ['participant__user__email', 'participant__room__code', 'room_question__question__text']
+    readonly_fields = ['is_correct', 'marks_obtained', 'created_at', 'updated_at']
+    date_hierarchy = 'submitted_at'
+
+@admin.register(DailyFocus)
+class DailyFocusAdmin(admin.ModelAdmin):
+    """Admin for DailyFocus model."""
+    list_display = ['date', 'status', 'source', 'created_at']
+    list_filter = ['status', 'source', 'created_at']
+    search_fields = ['date', 'source']
+    readonly_fields = ['created_at']
+    date_hierarchy = 'date'
 
 @admin.register(Exam)
 class ExamAdmin(admin.ModelAdmin):

@@ -14,6 +14,8 @@ from .views import (
     XPLogViewSet,
     LeaderboardViewSet,
     DailyFocusViewSet,
+    RoomViewSet,
+    ParticipantAttemptViewSet,
     gamification_summary,
     get_todays_tasks,
     complete_task,
@@ -22,6 +24,7 @@ from .views import (
     get_available_questions_count,
     generate_test,
     generate_custom_test,
+    preview_room_test_summary,
 )
 
 router = DefaultRouter()
@@ -38,6 +41,8 @@ router.register(r'study-guilds', StudyGuildViewSet, basename='studyguid')
 router.register(r'xp-logs', XPLogViewSet, basename='xplog')
 router.register(r'leaderboard', LeaderboardViewSet, basename='leaderboard')
 router.register(r'daily-focus', DailyFocusViewSet, basename='dailyfocus')
+router.register(r'rooms', RoomViewSet, basename='room')
+router.register(r'participant-attempts', ParticipantAttemptViewSet, basename='participantattempt')
 
 urlpatterns = [
     # Custom endpoints (must come before router.urls to avoid conflicts)
@@ -49,6 +54,7 @@ urlpatterns = [
     path('available-questions-count/', get_available_questions_count, name='get_available_questions_count'),
     path('generate-test/', generate_test, name='generate_test'),
     path('custom-test/generate/', generate_custom_test, name='generate_custom_test'),
+    path('rooms/preview-test-summary/', preview_room_test_summary, name='preview_room_test_summary'),
     # Router URLs (must come last)
     path('', include(router.urls)),
 ]
