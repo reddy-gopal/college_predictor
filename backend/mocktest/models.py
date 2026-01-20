@@ -15,6 +15,8 @@ from django.db import models
 from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
+from django.db.models import Q
+import hashlib
 from accounts.models import CustomUser
 
 
@@ -243,30 +245,21 @@ class MockTest(models.Model):
         return f"{self.title} ({self.get_test_type_display()})"
 
 
-class Question(models.Model):
+class QuestionBank(models.Model):
     """
-    Question in a mock test.
+    Canonical question bank - stores unique questions reusable across multiple tests.
+    
+    This model eliminates duplicate questions by storing each unique question once.
+    Questions are linked to mock tests via MockTestQuestion junction table.
+    
+    Migration Note: This replaces the pattern where Question had a ForeignKey to MockTest,
+    which caused duplicate questions when the same question appeared in multiple tests.
     """
     class QuestionType(models.TextChoices):
         MCQ = 'mcq', 'Multiple Choice Question'
         INTEGER = 'integer', 'Integer Type'
         NUMERICAL = 'numerical', 'Numerical Value'
 
-    mock_test = models.ForeignKey(
-        MockTest,
-        on_delete=models.CASCADE,
-        related_name='questions',
-        db_index=True,
-        null=True,
-        blank=True,
-        verbose_name='Mock Test',
-        help_text='Mock test this question belongs to (null for standalone questions in question bank)'
-    )
-    question_number = models.PositiveIntegerField(
-        db_index=True,
-        verbose_name='Question Number',
-        help_text='Position in the test'
-    )
     question_type = models.CharField(
         max_length=30,
         choices=QuestionType.choices,
@@ -285,12 +278,12 @@ class Question(models.Model):
     exam = models.ForeignKey(
         Exam,
         on_delete=models.PROTECT,
-        related_name='questions',
+        related_name='question_bank_questions',
         db_index=True,
         null=True,
         blank=True,
         verbose_name='Exam',
-        help_text='Exam this question belongs to (required for new questions)'
+        help_text='Exam this question belongs to'
     )
     year = models.PositiveIntegerField(
         db_index=True,
@@ -327,7 +320,7 @@ class Question(models.Model):
     difficulty_level = models.ForeignKey(
         DifficultyLevel,
         on_delete=models.PROTECT,
-        related_name='questions',
+        related_name='question_bank_questions',
         db_index=True,
         verbose_name='Difficulty Level'
     )
@@ -345,13 +338,26 @@ class Question(models.Model):
         default=4.0,
         validators=[MinValueValidator(0)],
         verbose_name='Marks',
-        help_text='Marks for this question (can override test default)'
+        help_text='Marks for this question'
     )
     negative_marks = models.FloatField(
         default=1.0,
         validators=[MinValueValidator(0)],
         verbose_name='Negative Marks',
-        help_text='Negative marks for wrong answer (can override test default)'
+        help_text='Negative marks for wrong answer'
+    )
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+        verbose_name='Is Active',
+        help_text='Soft delete flag - set to False to hide question without deleting'
+    )
+    question_hash = models.CharField(
+        max_length=64,
+        unique=True,
+        db_index=True,
+        verbose_name='Question Hash',
+        help_text='SHA256 hash of (text + exam_id + year + subject) for duplicate detection'
     )
     created_at = models.DateTimeField(
         default=timezone.now,
@@ -363,26 +369,90 @@ class Question(models.Model):
     )
 
     class Meta:
-        verbose_name = 'Question'
-        verbose_name_plural = 'Questions'
+        verbose_name = 'Question Bank'
+        verbose_name_plural = 'Question Bank'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['exam', 'year']),
+            models.Index(fields=['subject', 'difficulty_level']),
+            models.Index(fields=['topic', 'subject']),
+            models.Index(fields=['exam', 'year', 'subject']),
+            models.Index(fields=['is_active', 'exam']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['question_hash'],
+                name='unique_question_hash'
+            )
+        ]
+
+    def save(self, *args, **kwargs):
+        """Auto-generate question_hash before saving."""
+        if not self.question_hash:
+            exam_id = str(self.exam_id) if self.exam_id else ''
+            year = str(self.year) if self.year else ''
+            hash_string = f"{self.text}{exam_id}{year}{self.subject}"
+            self.question_hash = hashlib.sha256(hash_string.encode()).hexdigest()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"QBank {self.id} - {self.subject} ({self.get_question_type_display()})"
+
+
+class MockTestQuestion(models.Model):
+    """
+    Junction table linking MockTest to QuestionBank.
+    
+    This allows the same question to be reused across multiple tests without duplication.
+    Questions are stored once in QuestionBank and linked to tests via this junction table.
+    """
+    mock_test = models.ForeignKey(
+        MockTest,
+        on_delete=models.CASCADE,
+        related_name='test_questions',
+        db_index=True,
+        verbose_name='Mock Test'
+    )
+    question = models.ForeignKey(
+        QuestionBank,
+        on_delete=models.CASCADE,
+        related_name='test_assignments',
+        db_index=True,
+        verbose_name='Question'
+    )
+    question_number = models.PositiveIntegerField(
+        db_index=True,
+        verbose_name='Question Number',
+        help_text='Position of this question in the test'
+    )
+    created_at = models.DateTimeField(
+        default=timezone.now,
+        verbose_name='Created At'
+    )
+
+    class Meta:
+        verbose_name = 'Mock Test Question'
+        verbose_name_plural = 'Mock Test Questions'
         ordering = ['mock_test', 'question_number']
         indexes = [
             models.Index(fields=['mock_test', 'question_number']),
-            models.Index(fields=['subject', 'difficulty_level']),
-            models.Index(fields=['topic', 'subject']),
-            models.Index(fields=['exam', 'year']),
-            models.Index(fields=['exam', 'year', 'subject']),
+            models.Index(fields=['mock_test', 'question']),
         ]
         constraints = [
             models.UniqueConstraint(
                 fields=['mock_test', 'question_number'],
-                name='unique_question_number_per_test'
+                name='unique_mocktestquestion_number_per_test'
+            ),
+            models.UniqueConstraint(
+                fields=['mock_test', 'question'],
+                name='unique_question_per_mocktest',
+                # Allow same question to appear multiple times if needed
+                # Remove this constraint if you want to allow duplicates in same test
             )
         ]
 
     def __str__(self):
-        test_title = self.mock_test.title if self.mock_test else "Standalone"
-        return f"Q{self.question_number} - {self.subject} ({test_title})"
+        return f"{self.mock_test.title} - Q{self.question_number} (QBank {self.question.id})"
 
 
 class StudentProfile(models.Model):
@@ -589,12 +659,12 @@ class StudentAnswer(models.Model):
         db_index=True,
         verbose_name='Test Attempt'
     )
-    question = models.ForeignKey(
-        Question,
+    question_bank = models.ForeignKey(
+        QuestionBank,
         on_delete=models.PROTECT,
         related_name='student_answers',
         db_index=True,
-        verbose_name='Question'
+        verbose_name='Question Bank'
     )
     selected_option = models.CharField(
         max_length=50,
@@ -628,20 +698,24 @@ class StudentAnswer(models.Model):
     class Meta:
         verbose_name = 'Student Answer'
         verbose_name_plural = 'Student Answers'
-        ordering = ['attempt', 'question__question_number']
+        ordering = ['attempt']
         indexes = [
-            models.Index(fields=['attempt', 'question']),
+            models.Index(fields=['attempt', 'question_bank']),
             models.Index(fields=['attempt', 'is_correct']),
         ]
         constraints = [
             models.UniqueConstraint(
-                fields=['attempt', 'question'],
-                name='unique_answer_per_question'
+                fields=['attempt', 'question_bank'],
+                name='unique_answer_per_question_bank'
             )
         ]
 
+    def get_question(self):
+        """Helper method to get question."""
+        return self.question_bank
+
     def __str__(self):
-        return f"{self.attempt.student.user.email} - Q{self.question.question_number} ({'✓' if self.is_correct else '✗'})"
+        return f"{self.attempt.student.user.email} - QBank {self.question_bank.id} ({'✓' if self.is_correct else '✗'})"
 
 
 class MistakeNotebook(models.Model):
@@ -662,12 +736,12 @@ class MistakeNotebook(models.Model):
         db_index=True,
         verbose_name='Student'
     )
-    question = models.ForeignKey(
-        Question,
+    question_bank = models.ForeignKey(
+        QuestionBank,
         on_delete=models.CASCADE,
         related_name='mistakes',
         db_index=True,
-        verbose_name='Question'
+        verbose_name='Question Bank'
     )
     attempt = models.ForeignKey(
         TestAttempt,
@@ -703,11 +777,15 @@ class MistakeNotebook(models.Model):
         indexes = [
             models.Index(fields=['student', '-logged_at']),
             models.Index(fields=['student', 'error_type']),
-            models.Index(fields=['question', 'student']),
+            models.Index(fields=['question_bank', 'student']),
         ]
 
+    def get_question(self):
+        """Helper method to get question."""
+        return self.question_bank
+
     def __str__(self):
-        return f"{self.student.user.email} - Mistake Q{self.question.question_number} ({self.get_error_type_display()})"
+        return f"{self.student.user.email} - Mistake QBank {self.question_bank.id} ({self.get_error_type_display()})"
 
 
 class StudyGuild(models.Model):
@@ -1227,11 +1305,11 @@ class RoomQuestion(models.Model):
         related_name="room_questions",
         verbose_name="Room"
     )
-    question = models.ForeignKey(
-        Question,
+    question_bank = models.ForeignKey(
+        QuestionBank,
         on_delete=models.CASCADE,
         related_name="room_questions",
-        verbose_name="Question"
+        verbose_name="Question Bank"
     )
     question_number = models.PositiveIntegerField(
         verbose_name="Question Number",
@@ -1246,7 +1324,12 @@ class RoomQuestion(models.Model):
         unique_together = [['room', 'question_number']]
         indexes = [
             models.Index(fields=['room', 'question_number']),
+            models.Index(fields=['room', 'question_bank']),
         ]
+
+    def get_question(self):
+        """Helper method to get question."""
+        return self.question_bank
 
     def __str__(self):
         return f"Room {self.room.code} - Q{self.question_number}"

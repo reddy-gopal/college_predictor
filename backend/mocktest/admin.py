@@ -9,7 +9,7 @@ from django.contrib import admin
 from django.utils.html import format_html
 
 from .models import (
-    PhoneOTP, DifficultyLevel, MockTest, Question,
+    PhoneOTP, DifficultyLevel, MockTest, QuestionBank, MockTestQuestion,
     StudentProfile, TestAttempt, StudentAnswer, MistakeNotebook,
     StudyGuild, XPLog, Leaderboard, Exam, DailyFocus,
     Room, RoomParticipant, RoomQuestion, ParticipantAttempt
@@ -54,12 +54,23 @@ class RoomParticipantAdmin(admin.ModelAdmin):
 
 @admin.register(RoomQuestion)
 class RoomQuestionAdmin(admin.ModelAdmin):
-    """Admin for RoomQuestion model."""
-    list_display = ['room', 'question_number', 'question', 'created_at']
+    """
+    Admin for RoomQuestion model.
+    
+    Migration Note: Supports both question (legacy) and question_bank (new).
+    """
+    list_display = ['room', 'question_number', 'get_question_display', 'created_at']
     list_filter = ['room', 'created_at']
-    search_fields = ['room__code', 'question__text', 'question__subject']
+    search_fields = ['room__code', 'question_bank__text', 'question_bank__subject']
     readonly_fields = ['created_at']
     ordering = ['room', 'question_number']
+    
+    def get_question_display(self, obj):
+        """Display question."""
+        if obj.question_bank:
+            return f"QBank {obj.question_bank.id} - {obj.question_bank.subject}"
+        return "No question"
+    get_question_display.short_description = 'Question'
 
 
 @admin.register(ParticipantAttempt)
@@ -118,12 +129,14 @@ class DifficultyLevelAdmin(admin.ModelAdmin):
     ordering = ['order', 'level']
 
 
-class QuestionInline(admin.TabularInline):
-    """Inline admin for Questions in MockTest."""
-    model = Question
+class MockTestQuestionInline(admin.TabularInline):
+    """Inline admin for MockTestQuestion (new system)."""
+    model = MockTestQuestion
     extra = 0
-    fields = ['question_number', 'question_type', 'subject', 'topic', 'difficulty_level', 'marks']
-    readonly_fields = ['question_number']
+    fields = ['question_number', 'question', 'created_at']
+    readonly_fields = ['created_at']
+    verbose_name = 'Test Question (QuestionBank)'
+    verbose_name_plural = 'Test Questions (QuestionBank)'
 
 
 @admin.register(MockTest)
@@ -133,12 +146,14 @@ class MockTestAdmin(admin.ModelAdmin):
     MockTest represents curated full-length tests or generated tests.
     - Full Length: Curated tests with fixed questions
     - Practice/Sectional/Custom: Generated tests (created via API)
+    
+    Questions are linked to tests via MockTestQuestion.
     """
     list_display = ['title', 'exam', 'test_type', 'total_questions', 'total_marks', 'duration_minutes', 'is_vip', 'is_active', 'created_at']
     list_filter = ['exam', 'test_type', 'is_vip', 'is_active', 'difficulty', 'created_at']
     search_fields = ['title', 'instructions', 'exam__name']
     readonly_fields = ['total_marks', 'created_at', 'updated_at']
-    inlines = [QuestionInline]
+    inlines = [MockTestQuestionInline]
     fieldsets = (
         ('Basic Information', {
             'fields': ('title', 'exam', 'test_type', 'difficulty')
@@ -155,25 +170,23 @@ class MockTestAdmin(admin.ModelAdmin):
     )
 
 
-@admin.register(Question)
-class QuestionAdmin(admin.ModelAdmin):
+@admin.register(QuestionBank)
+class QuestionBankAdmin(admin.ModelAdmin):
     """
-    Admin for Question model.
-    Questions are the source of truth - can be standalone (question bank) or attached to MockTest.
-    - Standalone questions (mock_test=None): Used for generating practice/sectional/custom tests
-    - Attached questions (mock_test set): Belong to a curated full-length test
+    Admin for QuestionBank model (new canonical question storage).
+    Questions in QuestionBank are unique and reusable across multiple tests.
     """
-    list_display = ['id', 'question_number', 'mock_test', 'exam', 'year', 'subject', 'topic', 'difficulty_level', 'question_type', 'marks']
-    list_filter = ['exam', 'year', 'mock_test', 'subject', 'difficulty_level', 'question_type', 'topic']
-    search_fields = ['text', 'topic', 'subject', 'mock_test__title', 'exam__name']
-    readonly_fields = ['created_at', 'updated_at']
+    list_display = ['id', 'question_type', 'subject', 'exam', 'year', 'topic', 'difficulty_level', 'marks', 'is_active', 'created_at']
+    list_filter = ['exam', 'year', 'subject', 'difficulty_level', 'question_type', 'topic', 'is_active', 'created_at']
+    search_fields = ['text', 'topic', 'subject', 'exam__name', 'question_hash']
+    readonly_fields = ['question_hash', 'created_at', 'updated_at']
     fieldsets = (
         ('Question Info', {
-            'fields': ('mock_test', 'question_number', 'question_type', 'text')
+            'fields': ('question_type', 'text')
         }),
         ('Exam & Year', {
             'fields': ('exam', 'year'),
-            'description': 'Required: Exam and year identify the question source'
+            'description': 'Exam and year identify the question source'
         }),
         ('Subject & Topic', {
             'fields': ('subject', 'topic', 'difficulty_level')
@@ -189,10 +202,35 @@ class QuestionAdmin(admin.ModelAdmin):
             'fields': ('explanation',),
             'classes': ('collapse',)
         }),
+        ('Metadata', {
+            'fields': ('is_active', 'question_hash'),
+            'description': 'question_hash is auto-generated for duplicate detection'
+        }),
         ('Timestamps', {
             'fields': ('created_at', 'updated_at')
         }),
     )
+
+
+@admin.register(MockTestQuestion)
+class MockTestQuestionAdmin(admin.ModelAdmin):
+    """Admin for MockTestQuestion (junction table linking tests to QuestionBank)."""
+    list_display = ['mock_test', 'question_number', 'question', 'created_at']
+    list_filter = ['mock_test', 'created_at']
+    search_fields = ['mock_test__title', 'question__text', 'question__subject']
+    readonly_fields = ['created_at']
+    ordering = ['mock_test', 'question_number']
+    fieldsets = (
+        ('Test Assignment', {
+            'fields': ('mock_test', 'question', 'question_number')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at',),
+            'classes': ('collapse',)
+        }),
+    )
+
+
 
 
 @admin.register(StudentProfile)
@@ -222,8 +260,15 @@ class StudentAnswerInline(admin.TabularInline):
     """Inline admin for StudentAnswers in TestAttempt."""
     model = StudentAnswer
     extra = 0
-    fields = ['question', 'selected_option', 'is_correct', 'marks_obtained', 'time_taken_seconds']
-    readonly_fields = ['is_correct', 'marks_obtained']
+    fields = ['get_question_display', 'selected_option', 'is_correct', 'marks_obtained', 'time_taken_seconds']
+    readonly_fields = ['get_question_display', 'is_correct', 'marks_obtained']
+    
+    def get_question_display(self, obj):
+        """Display question."""
+        if obj.question_bank:
+            return f"QBank {obj.question_bank.id}"
+        return "No question"
+    get_question_display.short_description = 'Question'
 
 
 @admin.register(TestAttempt)
@@ -256,21 +301,49 @@ class TestAttemptAdmin(admin.ModelAdmin):
 
 @admin.register(StudentAnswer)
 class StudentAnswerAdmin(admin.ModelAdmin):
-    """Admin for StudentAnswer model."""
-    list_display = ['attempt', 'question', 'selected_option', 'is_correct', 'marks_obtained', 'time_taken_seconds']
+    """
+    Admin for StudentAnswer model.
+    
+    Migration Note: Supports both question (legacy) and question_bank (new).
+    """
+    list_display = ['attempt', 'get_question_display', 'selected_option', 'is_correct', 'marks_obtained', 'time_taken_seconds']
     list_filter = ['is_correct', 'attempt__mock_test', 'attempt__is_completed']
-    search_fields = ['attempt__student__user__email', 'question__text', 'question__subject']
+    search_fields = [
+        'attempt__student__user__email', 
+        'question_bank__text', 'question_bank__subject'
+    ]
     readonly_fields = ['is_correct', 'marks_obtained', 'created_at', 'updated_at']
+    
+    def get_question_display(self, obj):
+        """Display question."""
+        if obj.question_bank:
+            return f"QBank {obj.question_bank.id} - {obj.question_bank.subject}"
+        return "No question"
+    get_question_display.short_description = 'Question'
 
 
 @admin.register(MistakeNotebook)
 class MistakeNotebookAdmin(admin.ModelAdmin):
-    """Admin for MistakeNotebook model."""
-    list_display = ['student', 'question', 'error_type', 'logged_at']
+    """
+    Admin for MistakeNotebook model.
+    
+    Migration Note: Supports both question (legacy) and question_bank (new).
+    """
+    list_display = ['student', 'get_question_display', 'error_type', 'logged_at']
     list_filter = ['error_type', 'logged_at']
-    search_fields = ['student__user__email', 'question__text', 'question__subject']
+    search_fields = [
+        'student__user__email', 
+        'question_bank__text', 'question_bank__subject'
+    ]
     readonly_fields = ['logged_at']
     date_hierarchy = 'logged_at'
+    
+    def get_question_display(self, obj):
+        """Display question."""
+        if obj.question_bank:
+            return f"QBank {obj.question_bank.id} - {obj.question_bank.subject}"
+        return "No question"
+    get_question_display.short_description = 'Question'
 
 
 @admin.register(StudyGuild)

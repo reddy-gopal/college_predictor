@@ -8,7 +8,7 @@ This module contains business logic for:
 """
 import random
 from django.db.models import Q
-from .models import Room, Question, RoomQuestion, RoomParticipant
+from .models import Room, QuestionBank, RoomQuestion, RoomParticipant
 
 
 def select_questions_for_room(room):
@@ -21,10 +21,10 @@ def select_questions_for_room(room):
     Returns:
         tuple: (questions_queryset, available_count, requested_count)
     """
-    # Base queryset: questions from the exam
-    queryset = Question.objects.filter(
+    # Base queryset: questions from QuestionBank
+    queryset = QuestionBank.objects.filter(
         exam=room.exam_id,
-        mock_test__isnull=True  # Only standalone questions from question bank
+        is_active=True
     )
     
     # Filter by subjects if specific mode
@@ -50,11 +50,11 @@ def select_questions_for_room(room):
     if room.question_types and len(room.question_types) > 0:
         queryset = queryset.filter(question_type__in=room.question_types)
     elif room.question_type_mix == Room.QuestionTypeMix.MCQ:
-        queryset = queryset.filter(question_type=Question.QuestionType.MCQ)
+        queryset = queryset.filter(question_type=QuestionBank.QuestionType.MCQ)
     elif room.question_type_mix == Room.QuestionTypeMix.INTEGER:
-        queryset = queryset.filter(question_type=Question.QuestionType.INTEGER)
+        queryset = queryset.filter(question_type=QuestionBank.QuestionType.INTEGER)
     elif room.question_type_mix == Room.QuestionTypeMix.NUMERICAL:
-        queryset = queryset.filter(question_type=Question.QuestionType.NUMERICAL)
+        queryset = queryset.filter(question_type=QuestionBank.QuestionType.NUMERICAL)
     # For MIXED, include all question types (no filter)
     
     # Ensure questions have required fields
@@ -144,7 +144,7 @@ def generate_room_questions(room, auto_adjust=False):
     for idx, question in enumerate(selected_questions, start=1):
         RoomQuestion.objects.create(
             room=room,
-            question=question,
+            question_bank=question,
             question_number=idx
         )
         created_count += 1
@@ -216,7 +216,7 @@ def calculate_participant_score(participant):
     # Calculate total marks from ALL questions in the room (not just attempted ones)
     # This ensures fair comparison across participants
     all_room_questions = participant.room.room_questions.all()
-    total_marks = sum(rq.question.marks for rq in all_room_questions)
+    total_marks = sum(rq.question_bank.marks for rq in all_room_questions)
     
     correct_count = attempts.filter(is_correct=True).count()
     wrong_count = attempts.filter(is_correct=False).count()

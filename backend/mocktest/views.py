@@ -17,14 +17,14 @@ from django.utils import timezone
 import random
 
 from .models import (
-    Exam, MockTest, Question, DifficultyLevel, StudentProfile,
+    Exam, MockTest, QuestionBank, MockTestQuestion, DifficultyLevel, StudentProfile,
     TestAttempt, StudentAnswer, MistakeNotebook, StudyGuild, XPLog, Leaderboard, DailyFocus,
     Room, RoomParticipant, RoomQuestion, ParticipantAttempt
 )
 from .serializers import (
     ExamSerializer,
     MockTestListSerializer, MockTestDetailSerializer,
-    QuestionSerializer, QuestionListSerializer,
+    UnifiedQuestionSerializer, QuestionListSerializer,
     DifficultyLevelSerializer,
     StudentProfileSerializer, StudentProfileCreateSerializer,
     TestAttemptListSerializer, TestAttemptDetailSerializer, TestAttemptCreateSerializer,
@@ -39,6 +39,7 @@ from .serializers import (
     RoomQuestionSerializer,
     ParticipantAttemptSerializer, ParticipantAttemptCreateSerializer,
 )
+from .question_utils import create_or_get_question_bank
 from .room_services import (
     validate_question_pool, generate_room_questions,
     randomize_questions_for_participant, calculate_participant_score
@@ -120,45 +121,63 @@ class MockTestViewSet(viewsets.ModelViewSet):
     def questions(self, request, pk=None):
         """
         Get questions for a test.
-        
-        All questions are stored in the Questions table and attached to MockTest.
-        - Full Length tests: Curated questions attached to MockTest
-        - Practice/Sectional/Custom tests: Questions copied from question bank and attached to MockTest
+        Returns questions from QuestionBank via MockTestQuestion junction table.
         """
+        from .models import MockTestQuestion
+        from .serializers import UnifiedQuestionSerializer
+        
         mock_test = self.get_object()
         
-        # Fetch questions from Questions table (all questions are in Questions table)
-        # Questions are attached to MockTest via ForeignKey
-        questions = mock_test.questions.all().order_by('question_number')
+        # Get questions via MockTestQuestion
+        mtq_entries = MockTestQuestion.objects.filter(
+            mock_test=mock_test
+        ).select_related('question').order_by('question_number')
         
-        # Use full QuestionSerializer to include all options
-        serializer = QuestionSerializer(questions, many=True)
-        return Response(serializer.data)
+        # Extract questions and question numbers
+        questions = [mtq.question for mtq in mtq_entries]
+        
+        # Serialize questions
+        serializer = UnifiedQuestionSerializer(questions, many=True)
+        data = serializer.data
+        
+        # Add question numbers
+        for idx, item in enumerate(data):
+            item['question_number'] = mtq_entries[idx].question_number
+        
+        return Response(data)
 
 
-class QuestionViewSet(viewsets.ModelViewSet):
+class QuestionBankViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for Question.
+    ViewSet for QuestionBank.
     - List: Returns lightweight list
     - Retrieve: Returns full question details
     """
-    queryset = Question.objects.select_related(
-        'mock_test', 'difficulty_level'
-    )
+    queryset = QuestionBank.objects.select_related(
+        'exam', 'difficulty_level'
+    ).filter(is_active=True)
     
     def get_queryset(self):
-        """Filter questions by test if test_id provided."""
+        """Filter questions by exam, year, subject if provided."""
         queryset = super().get_queryset()
-        test_id = self.request.query_params.get('test_id')
-        if test_id:
-            queryset = queryset.filter(mock_test_id=test_id)
-        return queryset.order_by('mock_test', 'question_number')
+        exam_id = self.request.query_params.get('exam_id')
+        year = self.request.query_params.get('year')
+        subject = self.request.query_params.get('subject')
+        
+        if exam_id:
+            queryset = queryset.filter(exam_id=exam_id)
+        if year:
+            queryset = queryset.filter(year=year)
+        if subject:
+            queryset = queryset.filter(subject=subject)
+        
+        return queryset.order_by('-created_at')
     
     def get_serializer_class(self):
         """Use list serializer for list, full serializer for detail."""
         if self.action == 'list':
             return QuestionListSerializer
-        return QuestionSerializer
+        return UnifiedQuestionSerializer
 
 
 class DifficultyLevelViewSet(viewsets.ReadOnlyModelViewSet):
@@ -227,7 +246,7 @@ class TestAttemptViewSet(viewsets.ModelViewSet):
         """Users can only see their own attempts unless staff."""
         queryset = TestAttempt.objects.select_related(
             'student__user', 'mock_test'
-        ).prefetch_related('answers__question')
+        ).prefetch_related('answers__question_bank')
         
         user = self.request.user
         if user and not user.is_staff:
@@ -351,14 +370,14 @@ class TestAttemptViewSet(viewsets.ModelViewSet):
         )
         
         if serializer.is_valid():
-            question = serializer.validated_data['question']
+            question_bank = serializer.validated_data['question_bank']
             selected_option = serializer.validated_data.get('selected_option', '')
             time_taken = serializer.validated_data.get('time_taken_seconds', 0)
             
             # Get or create answer
             answer, created = StudentAnswer.objects.get_or_create(
                 attempt=attempt,
-                question=question,
+                question_bank=question_bank,
                 defaults={
                     'selected_option': selected_option,
                     'time_taken_seconds': time_taken,
@@ -371,14 +390,14 @@ class TestAttemptViewSet(viewsets.ModelViewSet):
                 answer.save()
             
             # Check if answer is correct
-            is_correct = (selected_option.upper() == question.correct_option.upper())
+            is_correct = (selected_option.upper() == question_bank.correct_option.upper())
             answer.is_correct = is_correct
             
             # Calculate marks
             if is_correct:
-                answer.marks_obtained = question.marks
+                answer.marks_obtained = question_bank.marks
             elif selected_option:  # Wrong answer (not blank)
-                answer.marks_obtained = -question.negative_marks
+                answer.marks_obtained = -question_bank.negative_marks
             else:  # Unanswered
                 answer.marks_obtained = 0.0
             
@@ -576,7 +595,7 @@ class TestAttemptViewSet(viewsets.ModelViewSet):
         # Get all incorrect answers (wrong answers and unanswered)
         incorrect_answers = answers.filter(
             Q(is_correct=False) | Q(selected_option='')
-        ).select_related('question')
+        ).select_related('question_bank')
         
         for answer in incorrect_answers:
             # Determine error type based on answer status
@@ -591,14 +610,14 @@ class TestAttemptViewSet(viewsets.ModelViewSet):
             # to avoid duplicates
             existing_mistake = MistakeNotebook.objects.filter(
                 student=attempt.student,
-                question=answer.question,
+                question_bank=answer.question_bank,
                 attempt=attempt
             ).first()
             
             if not existing_mistake:
                 MistakeNotebook.objects.create(
                     student=attempt.student,
-                    question=answer.question,
+                    question_bank=answer.question_bank,
                     attempt=attempt,
                     error_type=error_type,
                     notes=''
@@ -648,7 +667,7 @@ class TestAttemptViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        answers = attempt.answers.all().select_related('question').order_by('question__question_number')
+        answers = attempt.answers.all().select_related('question_bank').order_by('id')
         serializer = StudentAnswerSerializer(answers, many=True)
         return Response(serializer.data)
     
@@ -671,21 +690,25 @@ class TestAttemptViewSet(viewsets.ModelViewSet):
                 'detail': 'Mock test not found for this attempt.'
             }, status=status.HTTP_404_NOT_FOUND)
         
-        # Get all questions for this mock test
-        all_questions = mock_test.questions.all().order_by('question_number')
+        # Get all questions for this mock test via MockTestQuestion
+        from .models import MockTestQuestion
+        mtq_entries = MockTestQuestion.objects.filter(
+            mock_test=mock_test
+        ).select_related('question').order_by('question_number')
         
         # Get all attempted question IDs
         attempted_question_ids = set(
-            attempt.answers.values_list('question_id', flat=True)
+            attempt.answers.values_list('question_bank_id', flat=True)
         )
         
         # Find unattempted questions
         unattempted_data = []
-        for question in all_questions:
+        for mtq in mtq_entries:
+            question = mtq.question
             if question.id not in attempted_question_ids:
                 unattempted_data.append({
-                    'question_number': question.question_number,
-                    'question': QuestionSerializer(question).data,
+                    'question_number': mtq.question_number,
+                    'question': UnifiedQuestionSerializer(question).data,
                     'correct_option': question.correct_option,
                     'marks': question.marks,
                 })
@@ -712,13 +735,13 @@ class StudentAnswerViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Users can only see their own answers unless staff."""
         queryset = StudentAnswer.objects.select_related(
-            'attempt__student__user', 'question'
+            'attempt__student__user', 'question_bank'
         )
         
         if not self.request.user.is_staff:
             queryset = queryset.filter(attempt__student__user=self.request.user)
         
-        return queryset.order_by('attempt', 'question__question_number')
+        return queryset.order_by('attempt', 'id')
     
     def get_serializer_class(self):
         """Use create serializer for creation."""
@@ -738,7 +761,7 @@ class MistakeNotebookViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Users can only see their own mistakes unless staff."""
         queryset = MistakeNotebook.objects.select_related(
-            'student__user', 'question', 'attempt'
+            'student__user', 'question_bank', 'attempt'
         )
         
         if not self.request.user.is_staff:
@@ -1001,7 +1024,7 @@ def generate_test_from_mistakes(request):
     # Get mistakes from MistakeNotebook
     mistakes_query = MistakeNotebook.objects.filter(
         student=student_profile
-    ).select_related('question', 'question__exam', 'question__difficulty_level')
+    ).select_related('question_bank', 'question_bank__exam', 'question_bank__difficulty_level')
     
     # Filter by error types if provided
     if error_types:
@@ -1014,10 +1037,10 @@ def generate_test_from_mistakes(request):
     seen_questions = set()
     
     for mistake in mistakes:
-        if mistake.question_id not in seen_questions:
-            seen_questions.add(mistake.question_id)
+        if mistake.question_bank_id not in seen_questions:
+            seen_questions.add(mistake.question_bank_id)
             unique_mistakes.append(mistake)
-            question_ids.append(mistake.question_id)
+            question_ids.append(mistake.question_bank_id)
     
     if not unique_mistakes:
         return Response(
@@ -1031,7 +1054,7 @@ def generate_test_from_mistakes(request):
         question_ids = question_ids[:question_count]
     
     # Get the first question to determine exam
-    first_question = unique_mistakes[0].question
+    first_question = unique_mistakes[0].question_bank
     exam = first_question.exam
     
     if not exam:
@@ -1065,9 +1088,11 @@ def generate_test_from_mistakes(request):
     successfully_created_mistake_ids = []
     
     for idx, mistake in enumerate(unique_mistakes, start=1):
-        original_question = mistake.question
+        original_question = mistake.question_bank
         
         # Skip if question doesn't have required fields
+        if not original_question:
+            continue
         if not original_question.difficulty_level:
             continue
         if not original_question.subject:
@@ -1076,24 +1101,11 @@ def generate_test_from_mistakes(request):
             continue
         
         try:
-            Question.objects.create(
+            # Create MockTestQuestion entry (reuse existing QuestionBank entry)
+            MockTestQuestion.objects.create(
                 mock_test=mock_test,
-                question_number=created_questions + 1,
-                question_type=original_question.question_type,
-                text=original_question.text,
-                option_a=original_question.option_a or '',
-                option_b=original_question.option_b or '',
-                option_c=original_question.option_c or '',
-                option_d=original_question.option_d or '',
-                correct_option=original_question.correct_option,
-                explanation=original_question.explanation or '',
-                marks=original_question.marks if original_question.marks else 4.0,
-                negative_marks=original_question.negative_marks if original_question.negative_marks else 1.0,
-                subject=original_question.subject,
-                topic=original_question.topic or '',
-                year=original_question.year,
-                difficulty_level=original_question.difficulty_level,
-                exam=original_question.exam,
+                question=original_question,
+                question_number=created_questions + 1
             )
             created_questions += 1
             successfully_created_mistake_ids.append(mistake.id)
@@ -1426,10 +1438,11 @@ def get_exam_years(request):
             status=status.HTTP_404_NOT_FOUND
         )
     
-    # Get distinct years from Questions table for this exam
-    years = Question.objects.filter(
+    # Get distinct years from QuestionBank for this exam
+    years = QuestionBank.objects.filter(
         exam=exam,
-        year__isnull=False
+        year__isnull=False,
+        is_active=True
     ).values_list('year', flat=True).distinct().order_by('-year')
     
     years_list = list(years)
@@ -1528,9 +1541,9 @@ def get_available_questions_count(request):
                 # If requested difficulty levels don't exist, return 0
                 return Response({'count': 0}, status=status.HTTP_200_OK)
     
-    # Count available questions
+    # Count available questions from QuestionBank
     try:
-        count = Question.objects.filter(query).count()
+        count = QuestionBank.objects.filter(query, is_active=True).count()
     except Exception as e:
         # Log error for debugging
         import logging
@@ -1684,11 +1697,10 @@ def generate_test(request):
         if difficulty_levels.exists():
             query &= Q(difficulty_level__in=difficulty_levels)
     
-    # Filter questions from Question table (not from MockTest)
-    # Questions must not belong to any mock test (standalone questions)
-    available_questions = Question.objects.filter(
+    # Filter questions from QuestionBank
+    available_questions = QuestionBank.objects.filter(
         query,
-        mock_test__isnull=True  # Only standalone questions
+        is_active=True
     ).select_related('difficulty_level')
     
     if not available_questions.exists():
@@ -1723,26 +1735,12 @@ def generate_test(request):
         is_active=True
     )
     
-    # Create questions for the test (copy from standalone questions)
+    # Create MockTestQuestion entries (link questions to test)
     for idx, question in enumerate(selected_questions, start=1):
-        Question.objects.create(
+        MockTestQuestion.objects.create(
             mock_test=mock_test,
-            question_number=idx,
-            question_type=question.question_type,
-            text=question.text,
-            subject=question.subject,
-            exam=question.exam,
-            year=question.year,
-            option_a=question.option_a,
-            option_b=question.option_b,
-            option_c=question.option_c,
-            option_d=question.option_d,
-            correct_option=question.correct_option,
-            difficulty_level=question.difficulty_level,
-            topic=question.topic,
-            explanation=question.explanation,
-            marks=question.marks,
-            negative_marks=question.negative_marks
+            question=question,
+            question_number=idx
         )
     
     # Create generation config
@@ -1773,6 +1771,10 @@ def generate_test(request):
 
 @api_view(['POST'])
 def generate_custom_test(request):
+    """
+    Generate a custom test from QuestionBank.
+    Uses QuestionBank and MockTestQuestion to link questions to tests.
+    """
     """
     Generate a custom test based on exam, years, subjects, difficulty, etc.
     
@@ -1858,9 +1860,8 @@ def generate_custom_test(request):
         if difficulty_levels.exists():
             query &= Q(difficulty_level__in=difficulty_levels)
     
-    # Get all matching questions (only standalone questions)
-    # Note: query already includes mock_test__isnull=True
-    available_questions = Question.objects.filter(query).select_related('difficulty_level')
+    # Get all matching questions from QuestionBank
+    available_questions = QuestionBank.objects.filter(query, is_active=True).select_related('difficulty_level')
     
     if not available_questions.exists():
         return Response(
@@ -1902,27 +1903,12 @@ def generate_custom_test(request):
         is_active=True
     )
     
-    # Create questions for the test
+    # Create MockTestQuestion entries (link questions to test)
     for idx, question in enumerate(selected_questions, start=1):
-        # Create a copy of the question for this test
-        Question.objects.create(
+        MockTestQuestion.objects.create(
             mock_test=mock_test,
-            question_number=idx,
-            question_type=question.question_type,
-            text=question.text,
-            subject=question.subject,
-            exam=question.exam,
-            year=question.year,
-            option_a=question.option_a,
-            option_b=question.option_b,
-            option_c=question.option_c,
-            option_d=question.option_d,
-            correct_option=question.correct_option,
-            difficulty_level=question.difficulty_level,
-            topic=question.topic,
-            explanation=question.explanation,
-            marks=question.marks,
-            negative_marks=question.negative_marks
+            question=question,
+            question_number=idx
         )
     
     # Create generation config
@@ -2315,7 +2301,7 @@ class RoomViewSet(viewsets.ModelViewSet):
         # Serialize questions
         question_data = []
         for rq in questions:
-            question = rq.question
+            question = rq.question_bank
             question_num = getattr(rq, '_display_number', rq.question_number)
             
             # Get participant's attempt if exists
@@ -2327,7 +2313,7 @@ class RoomViewSet(viewsets.ModelViewSet):
             question_data.append({
                 'room_question_id': rq.id,
                 'question_number': question_num,
-                'question': QuestionSerializer(question).data,
+                'question': UnifiedQuestionSerializer(question).data,
                 'attempt': ParticipantAttemptSerializer(attempt).data if attempt else None,
                 'time_per_question_minutes': room.time_per_question,
                 'total_duration_minutes': room.duration + room.time_buffer,
@@ -2531,13 +2517,13 @@ class RoomViewSet(viewsets.ModelViewSet):
         
         review_data = []
         for attempt in wrong_attempts:
-            question = attempt.room_question.question
+            question = attempt.room_question.question_bank
             room_question = attempt.room_question
             
             review_data.append({
                 'attempt_id': attempt.id,
                 'question_number': room_question.question_number,
-                'question': QuestionSerializer(question).data,
+                'question': UnifiedQuestionSerializer(question).data,
                 'selected_option': attempt.selected_option,
                 'answer_text': attempt.answer_text,
                 'correct_option': question.correct_option,
@@ -2595,11 +2581,11 @@ class RoomViewSet(viewsets.ModelViewSet):
         unattempted_data = []
         for room_question in room_questions:
             if room_question.id not in attempted_question_ids:
-                question = room_question.question
+                question = room_question.question_bank
                 
                 unattempted_data.append({
                     'question_number': room_question.question_number,
-                    'question': QuestionSerializer(question).data,
+                    'question': UnifiedQuestionSerializer(question).data,
                     'correct_option': question.correct_option,
                     'marks': question.marks,
                 })
@@ -2677,11 +2663,11 @@ class ParticipantAttemptViewSet(viewsets.ModelViewSet):
             attempt.save()
         
         # Calculate correctness and marks
-        question = room_question.question
+        question = room_question.question_bank
         is_correct = False
         marks_obtained = 0.0
         
-        if question.question_type == Question.QuestionType.MCQ:
+        if question.question_type == QuestionBank.QuestionType.MCQ:
             # MCQ: Compare selected option with correct option
             selected = attempt.selected_option
             if selected and selected.strip() and selected.upper().strip() == question.correct_option.upper().strip():

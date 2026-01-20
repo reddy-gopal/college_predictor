@@ -11,7 +11,7 @@ Design Decisions:
 from rest_framework import serializers
 from django.conf import settings
 from .models import (
-    PhoneOTP, Exam, DifficultyLevel, MockTest, Question,
+    PhoneOTP, Exam, DifficultyLevel, MockTest, QuestionBank,
     StudentProfile, TestAttempt, StudentAnswer, MistakeNotebook,
     StudyGuild, XPLog, Leaderboard, DailyFocus,
     Room, RoomParticipant, RoomQuestion, ParticipantAttempt
@@ -142,12 +142,8 @@ class MockTestDetailSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'total_marks', 'created_at', 'updated_at', 'questions_count']
 
 
-class QuestionSerializer(serializers.ModelSerializer):
-    """Serializer for Question."""
-    mock_test_title = serializers.CharField(
-        source='mock_test.title',
-        read_only=True
-    )
+class QuestionBankSerializer(serializers.ModelSerializer):
+    """Serializer for QuestionBank (new canonical question format)."""
     question_type_display = serializers.CharField(
         source='get_question_type_display',
         read_only=True
@@ -160,16 +156,15 @@ class QuestionSerializer(serializers.ModelSerializer):
     )
     
     class Meta:
-        model = Question
+        model = QuestionBank
         fields = [
             'id',
-            'mock_test',
-            'mock_test_title',
-            'question_number',
             'question_type',
             'question_type_display',
             'text',
             'subject',
+            'exam',
+            'year',
             'option_a',
             'option_b',
             'option_c',
@@ -181,6 +176,45 @@ class QuestionSerializer(serializers.ModelSerializer):
             'explanation',
             'marks',
             'negative_marks',
+            'is_active',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'question_hash', 'created_at', 'updated_at']
+
+
+class UnifiedQuestionSerializer(serializers.ModelSerializer):
+    """
+    Unified serializer for QuestionBank.
+    """
+    question_type_display = serializers.CharField(
+        source='get_question_type_display',
+        read_only=True
+    )
+    difficulty_level = DifficultyLevelSerializer(read_only=True)
+    question_number = serializers.IntegerField(read_only=True, allow_null=True)
+    
+    class Meta:
+        model = QuestionBank
+        fields = [
+            'id',
+            'question_type',
+            'question_type_display',
+            'text',
+            'subject',
+            'exam',
+            'year',
+            'option_a',
+            'option_b',
+            'option_c',
+            'option_d',
+            'correct_option',
+            'difficulty_level',
+            'topic',
+            'explanation',
+            'marks',
+            'negative_marks',
+            'question_number',
             'created_at',
             'updated_at',
         ]
@@ -188,7 +222,7 @@ class QuestionSerializer(serializers.ModelSerializer):
 
 
 class QuestionListSerializer(serializers.ModelSerializer):
-    """Lightweight serializer for Question list."""
+    """Lightweight serializer for QuestionBank list."""
     question_type_display = serializers.CharField(
         source='get_question_type_display',
         read_only=True
@@ -199,10 +233,9 @@ class QuestionListSerializer(serializers.ModelSerializer):
     )
     
     class Meta:
-        model = Question
+        model = QuestionBank
         fields = [
             'id',
-            'question_number',
             'question_type',
             'question_type_display',
             'text',
@@ -392,16 +425,17 @@ class TestAttemptCreateSerializer(serializers.ModelSerializer):
 
 class StudentAnswerSerializer(serializers.ModelSerializer):
     """Serializer for StudentAnswer."""
-    question = QuestionSerializer(read_only=True)
-    question_id = serializers.PrimaryKeyRelatedField(
-        queryset=Question.objects.all(),
-        source='question',
+    question = UnifiedQuestionSerializer(read_only=True, source='get_question')
+    question_bank_id = serializers.PrimaryKeyRelatedField(
+        queryset=QuestionBank.objects.all(),
+        source='question_bank',
         write_only=True
     )
-    question_text = serializers.CharField(
-        source='question.text',
-        read_only=True
-    )
+    question_text = serializers.SerializerMethodField()
+    
+    def get_question_text(self, obj):
+        """Get question text."""
+        return obj.question_bank.text if obj.question_bank else ''
     
     class Meta:
         model = StudentAnswer
@@ -409,7 +443,7 @@ class StudentAnswerSerializer(serializers.ModelSerializer):
             'id',
             'attempt',
             'question',
-            'question_id',
+            'question_bank_id',
             'question_text',
             'selected_option',
             'is_correct',
@@ -433,22 +467,10 @@ class StudentAnswerCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = StudentAnswer
         fields = [
-            'question',
+            'question_bank',
             'selected_option',
             'time_taken_seconds',
         ]
-    
-    def validate(self, data):
-        """Validate answer belongs to attempt's test."""
-        attempt = self.context['attempt']
-        question = data['question']
-        
-        if question.mock_test != attempt.mock_test:
-            raise serializers.ValidationError(
-                'Question does not belong to this test.'
-            )
-        
-        return data
 
 
 class MistakeNotebookSerializer(serializers.ModelSerializer):
@@ -457,51 +479,52 @@ class MistakeNotebookSerializer(serializers.ModelSerializer):
         source='student.user.email',
         read_only=True
     )
-    question_text = serializers.CharField(
-        source='question.text',
-        read_only=True
-    )
-    question_number = serializers.IntegerField(
-        source='question.question_number',
-        read_only=True
-    )
-    question_subject = serializers.CharField(
-        source='question.subject',
-        read_only=True
-    )
-    question_chapter = serializers.CharField(
-        source='question.chapter',
-        read_only=True
-    )
-    question_correct_option = serializers.CharField(
-        source='question.correct_option',
-        read_only=True
-    )
-    question_option_a = serializers.CharField(
-        source='question.option_a',
-        read_only=True
-    )
-    question_option_b = serializers.CharField(
-        source='question.option_b',
-        read_only=True
-    )
-    question_option_c = serializers.CharField(
-        source='question.option_c',
-        read_only=True
-    )
-    question_option_d = serializers.CharField(
-        source='question.option_d',
-        read_only=True
-    )
-    question_explanation = serializers.CharField(
-        source='question.explanation',
-        read_only=True
-    )
+    question = UnifiedQuestionSerializer(read_only=True, source='get_question')
+    question_text = serializers.SerializerMethodField()
+    question_number = serializers.SerializerMethodField()
+    question_subject = serializers.SerializerMethodField()
+    question_chapter = serializers.SerializerMethodField()
+    question_correct_option = serializers.SerializerMethodField()
+    question_option_a = serializers.SerializerMethodField()
+    question_option_b = serializers.SerializerMethodField()
+    question_option_c = serializers.SerializerMethodField()
+    question_option_d = serializers.SerializerMethodField()
+    question_explanation = serializers.SerializerMethodField()
     test_title = serializers.SerializerMethodField()
     error_type_display = serializers.CharField(
         source='get_error_type_display',
         read_only=True
     )
+    
+    def get_question_text(self, obj):
+        return obj.question_bank.text if obj.question_bank else ''
+    
+    def get_question_number(self, obj):
+        return None  # QuestionBank doesn't have question_number
+    
+    def get_question_subject(self, obj):
+        return obj.question_bank.subject if obj.question_bank else ''
+    
+    def get_question_chapter(self, obj):
+        return ''  # Chapter field doesn't exist
+    
+    def get_question_correct_option(self, obj):
+        return obj.question_bank.correct_option if obj.question_bank else ''
+    
+    def get_question_option_a(self, obj):
+        return (obj.question_bank.option_a or '') if obj.question_bank else ''
+    
+    def get_question_option_b(self, obj):
+        return (obj.question_bank.option_b or '') if obj.question_bank else ''
+    
+    def get_question_option_c(self, obj):
+        return (obj.question_bank.option_c or '') if obj.question_bank else ''
+    
+    def get_question_option_d(self, obj):
+        return (obj.question_bank.option_d or '') if obj.question_bank else ''
+    
+    def get_question_explanation(self, obj):
+        return (obj.question_bank.explanation or '') if obj.question_bank else ''
     
     def get_test_title(self, obj):
         """Safely get test title, handling None attempt."""
@@ -654,10 +677,10 @@ class DailyFocusSerializer(serializers.ModelSerializer):
 
 class RoomQuestionSerializer(serializers.ModelSerializer):
     """Serializer for RoomQuestion."""
-    question = QuestionSerializer(read_only=True)
-    question_id = serializers.PrimaryKeyRelatedField(
-        queryset=Question.objects.all(),
-        source='question',
+    question = UnifiedQuestionSerializer(read_only=True, source='get_question')
+    question_bank_id = serializers.PrimaryKeyRelatedField(
+        queryset=QuestionBank.objects.all(),
+        source='question_bank',
         write_only=True
     )
     
@@ -667,7 +690,7 @@ class RoomQuestionSerializer(serializers.ModelSerializer):
             'id',
             'room',
             'question',
-            'question_id',
+            'question_bank_id',
             'question_number',
             'created_at',
         ]
