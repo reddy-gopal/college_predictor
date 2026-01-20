@@ -7,7 +7,9 @@ import { mockTestApi } from '@/lib/api';
 export default function MockTestAttemptPage() {
   const params = useParams();
   const router = useRouter();
-  const testId = params.id;
+  // Extract only the numeric ID from params.id (in case it includes extra text)
+  // This handles cases where the URL might have been malformed
+  const testId = params.id ? String(params.id).split('/')[0].trim() : null;
 
   const [test, setTest] = useState(null);
   const [questions, setQuestions] = useState([]);
@@ -40,6 +42,14 @@ export default function MockTestAttemptPage() {
   }, [timeRemaining]);
 
   const loadTest = async () => {
+    // Validate testId before making API calls
+    if (!testId || isNaN(Number(testId))) {
+      setError('Invalid test ID. Please select a test from the list.');
+      setLoading(false);
+      router.push('/mock-tests');
+      return;
+    }
+    
     try {
       setLoading(true);
       setError(null); // Clear any previous errors
@@ -80,8 +90,10 @@ export default function MockTestAttemptPage() {
             // Populate answers state with existing answers
             const answersMap = {};
             existingAnswers.forEach((answer) => {
-              if (answer.question && answer.selected_option) {
-                answersMap[answer.question] = answer.selected_option;
+              // Use question_bank_id or question.id (QuestionBank id)
+              const questionId = answer.question_bank_id || (answer.question && answer.question.id);
+              if (questionId && answer.selected_option) {
+                answersMap[questionId] = answer.selected_option;
               }
             });
             setAnswers(answersMap);
@@ -160,7 +172,7 @@ export default function MockTestAttemptPage() {
       try {
         const question = questions.find((q) => q.id === questionId);
         await mockTestApi.submitAnswer(attemptId, {
-          question: questionId,
+          question_bank: questionId, // Changed from 'question' to 'question_bank'
           selected_option: selectedOption,
           time_taken_seconds: 0,
         });

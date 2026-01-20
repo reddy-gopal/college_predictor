@@ -96,18 +96,18 @@ export default function PerformanceAnalytics() {
   }
 
   return (
-    <div className="card bg-white dark:bg-gray-800 mb-6">
-      <div className="p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+    <div className="card bg-white dark:bg-gray-800 mb-4 md:mb-6">
+      <div className="p-4 md:p-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-4 sm:mb-6">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
             Performance Analytics
           </h2>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 w-full sm:w-auto">
             {['score', 'accuracy', 'section', 'time'].map((type) => (
               <button
                 key={type}
                 onClick={() => setSelectedChart(type)}
-                className={`px-3 py-1 rounded text-sm font-medium transition-colors capitalize ${
+                className={`flex-1 sm:flex-none px-2 sm:px-3 py-1.5 sm:py-1 rounded text-xs sm:text-sm font-medium transition-colors capitalize ${
                   selectedChart === type
                     ? 'bg-primary text-white'
                     : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
@@ -119,11 +119,11 @@ export default function PerformanceAnalytics() {
           </div>
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
           {/* Score Trend */}
           {selectedChart === 'score' && analytics?.score_trend && (
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">
                 Score Trend (Last 30 Days)
               </h3>
               <SimpleLineChart
@@ -139,7 +139,7 @@ export default function PerformanceAnalytics() {
           {/* Accuracy Trend */}
           {selectedChart === 'accuracy' && analytics?.accuracy_trend && (
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">
                 Accuracy Trend (Last 30 Days)
               </h3>
               <SimpleLineChart
@@ -155,10 +155,10 @@ export default function PerformanceAnalytics() {
           {/* Section-wise Accuracy */}
           {selectedChart === 'section' && analytics?.section_accuracy && (
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">
                 Section-wise Accuracy
               </h3>
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 {Object.entries(analytics.section_accuracy)
                   .filter(([_, accuracy]) => accuracy > 0)
                   .map(([section, accuracy]) => (
@@ -186,7 +186,7 @@ export default function PerformanceAnalytics() {
           {/* Time vs Accuracy */}
           {selectedChart === 'time' && analytics?.time_vs_accuracy && (
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">
                 Time Spent vs Accuracy
               </h3>
               <SimpleLineChart

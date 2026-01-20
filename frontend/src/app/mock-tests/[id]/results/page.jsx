@@ -269,13 +269,15 @@ export default function MockTestResultsPage() {
               Answer Review
             </h2>
             <div className="space-y-4">
-              {answers.map((answer, index) => (
-                <AnswerReviewItem
-                  key={answer.id}
-                  answer={answer}
-                  questionNumber={index + 1}
-                />
-              ))}
+              {answers
+                .sort((a, b) => (a.question_number || 9999) - (b.question_number || 9999))
+                .map((answer) => (
+                  <AnswerReviewItem
+                    key={answer.id}
+                    answer={answer}
+                    questionNumber={answer.question_number || 0}
+                  />
+                ))}
             </div>
           </div>
         )}

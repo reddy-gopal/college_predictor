@@ -92,21 +92,21 @@ export default function TestAttemptsSummary() {
   }
 
   return (
-    <div className="card bg-white dark:bg-gray-800 mb-6">
-      <div className="p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+    <div className="card bg-white dark:bg-gray-800 mb-4 md:mb-6">
+      <div className="p-4 md:p-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-4 sm:mb-6">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
             Test Attempts Summary
           </h2>
           <button
             onClick={handleViewAll}
-            className="btn-secondary text-sm"
+            className="btn-secondary text-sm w-full sm:w-auto"
           >
             View All Attempts
           </button>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
           <SummaryCard
             label="Total Tests"
             value={summary?.total_tests || 0}
@@ -146,12 +146,12 @@ function SummaryCard({ label, value, icon, color }) {
   };
 
   return (
-    <div className={`p-4 rounded-lg border-2 bg-gradient-to-br ${colorClasses[color]} text-center`}>
-      <div className="text-3xl mb-2">{icon}</div>
-      <div className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
+    <div className={`p-3 sm:p-4 rounded-lg border-2 bg-gradient-to-br ${colorClasses[color]} text-center`}>
+      <div className="text-2xl sm:text-3xl mb-1 sm:mb-2">{icon}</div>
+      <div className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-1">
         {value}
       </div>
-      <div className="text-sm text-gray-600 dark:text-gray-400">{label}</div>
+      <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">{label}</div>
     </div>
   );
 }

@@ -237,8 +237,23 @@ class MockTest(models.Model):
 
     def save(self, *args, **kwargs):
         """Auto-calculate total_marks before saving."""
-        if not self.total_marks or self.total_marks == 0:
-            self.total_marks = self.total_questions * self.marks_per_question
+        # Calculate total_marks from actual questions in QuestionBank via MockTestQuestion
+        # This ensures accuracy even if questions have different marks
+        if self.pk:  # Only calculate if test already exists (has questions linked)
+            from django.db.models import Sum
+            total_from_questions = self.test_questions.aggregate(
+                total=Sum('question__marks')
+            )['total'] or 0.0
+            
+            if total_from_questions > 0:
+                self.total_marks = total_from_questions
+            elif not self.total_marks or self.total_marks == 0:
+                # Fallback to formula if no questions linked yet
+                self.total_marks = self.total_questions * self.marks_per_question
+        else:
+            # For new tests, use formula (questions will be linked after save)
+            if not self.total_marks or self.total_marks == 0:
+                self.total_marks = self.total_questions * self.marks_per_question
         super().save(*args, **kwargs)
 
     def __str__(self):

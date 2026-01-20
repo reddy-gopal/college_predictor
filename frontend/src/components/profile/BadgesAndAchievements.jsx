@@ -97,21 +97,21 @@ export default function BadgesAndAchievements() {
   }
 
   return (
-    <div className="card bg-white dark:bg-gray-800 mb-6">
-      <div className="p-6">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
+    <div className="card bg-white dark:bg-gray-800 mb-4 md:mb-6">
+      <div className="p-4 md:p-6">
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-4 sm:mb-6">
           Badges & Achievements
         </h2>
 
         {error && !badges.length ? (
-          <div className="text-center py-8">
-            <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
+          <div className="text-center py-6 sm:py-8">
+            <p className="text-sm sm:text-base text-red-600 dark:text-red-400 mb-4">{error}</p>
             <button onClick={fetchBadges} className="btn-primary">
               Try Again
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
             {badges.map((badge) => (
               <BadgeCard key={badge.id} badge={badge} />
             ))}
@@ -134,16 +134,17 @@ function BadgeCard({ badge }) {
       }`}
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
+      onTouchStart={() => setShowTooltip(!showTooltip)}
     >
       <div className="text-center">
-        <div className="text-4xl mb-2 filter grayscale-0">
+        <div className="text-3xl sm:text-4xl mb-1 sm:mb-2 filter grayscale-0">
           {badge.unlocked ? badge.icon : '🔒'}
         </div>
-        <div className="font-semibold text-sm text-gray-900 dark:text-white mb-1">
+        <div className="font-semibold text-xs sm:text-sm text-gray-900 dark:text-white mb-1">
           {badge.name}
         </div>
         {!badge.unlocked && badge.progress > 0 && (
-          <div className="mt-2">
+          <div className="mt-1 sm:mt-2">
             <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5">
               <div
                 className="bg-primary h-1.5 rounded-full transition-all duration-300"

@@ -71,7 +71,7 @@ class MockTestViewSet(viewsets.ModelViewSet):
     - Supports filtering by exam, year, test_type
     """
     queryset = MockTest.objects.prefetch_related(
-        'questions', 'difficulty', 'exam'
+        'test_questions__question', 'difficulty', 'exam'
     ).select_related('difficulty', 'exam')
     
     def get_queryset(self):
@@ -93,12 +93,12 @@ class MockTestViewSet(viewsets.ModelViewSet):
         if exam_id:
             queryset = queryset.filter(exam_id=exam_id)
         
-        # Filter by year (check questions in the test)
+        # Filter by year (check questions in the test via MockTestQuestion)
         year = self.request.query_params.get('year')
         if year:
             try:
                 year_int = int(year)
-                queryset = queryset.filter(questions__year=year_int).distinct()
+                queryset = queryset.filter(test_questions__question__year=year_int).distinct()
             except ValueError:
                 pass
         
@@ -657,7 +657,7 @@ class TestAttemptViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['get'])
     def answers(self, request, pk=None):
-        """Get all answers for this attempt."""
+        """Get all answers for this attempt, ordered by question number."""
         attempt = self.get_object()
         
         user = self.request.user
@@ -667,8 +667,23 @@ class TestAttemptViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        answers = attempt.answers.all().select_related('question_bank').order_by('id')
-        serializer = StudentAnswerSerializer(answers, many=True)
+        # Get answers with question_bank prefetched
+        answers = attempt.answers.all().select_related('question_bank')
+        
+        # Get question numbers from MockTestQuestion and sort answers by question number
+        from .models import MockTestQuestion
+        mtq_map = {
+            mtq.question_id: mtq.question_number
+            for mtq in MockTestQuestion.objects.filter(
+                mock_test=attempt.mock_test
+            ).select_related('question')
+        }
+        
+        # Sort answers by question number
+        answers_list = list(answers)
+        answers_list.sort(key=lambda a: mtq_map.get(a.question_bank_id, 9999))
+        
+        serializer = StudentAnswerSerializer(answers_list, many=True)
         return Response(serializer.data)
     
     @action(detail=True, methods=['get'], url_path='unattempted')
@@ -1127,6 +1142,24 @@ def generate_test_from_mistakes(request):
     
     mock_test.total_questions = created_questions
     mock_test.duration_minutes = int(created_questions * time_per_question)
+    
+    # Recalculate total_marks from actual question marks
+    from django.db.models import Sum
+    total_marks = mock_test.test_questions.aggregate(
+        total=Sum('question__marks')
+    )['total'] or 0.0
+    if total_marks > 0:
+        mock_test.total_marks = total_marks
+        mock_test.save(update_fields=['total_marks'])
+    
+    # Recalculate total_marks from actual question marks
+    from django.db.models import Sum
+    total_marks = mock_test.test_questions.aggregate(
+        total=Sum('question__marks')
+    )['total'] or 0.0
+    if total_marks > 0:
+        mock_test.total_marks = total_marks
+        mock_test.save(update_fields=['total_marks'])
     error_type_str = ', '.join(error_types) if error_types else 'All Mistakes'
     mock_test.title = f"Practice Test - {error_type_str.title()} ({created_questions} Questions)"
     mock_test.save()
@@ -1508,14 +1541,14 @@ def get_available_questions_count(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
     
-    # Build base query - only standalone questions (not attached to any MockTest)
-    query = Q(exam=exam, mock_test__isnull=True)
+    # Build base query - query QuestionBank directly (questions can be reused across tests)
+    query = Q(exam=exam, is_active=True)
     
     # Add year filter if years are provided
     if years:
         query &= Q(year__in=years)
     else:
-        # If no years specified, include all years (but still filter by exam and standalone)
+        # If no years specified, include all years (but still filter by exam)
         pass
     
     # Parse and filter by subjects
@@ -1543,7 +1576,7 @@ def get_available_questions_count(request):
     
     # Count available questions from QuestionBank
     try:
-        count = QuestionBank.objects.filter(query, is_active=True).count()
+        count = QuestionBank.objects.filter(query).count()
     except Exception as e:
         # Log error for debugging
         import logging
@@ -1910,6 +1943,15 @@ def generate_custom_test(request):
             question=question,
             question_number=idx
         )
+    
+    # Recalculate total_marks from actual question marks
+    from django.db.models import Sum
+    total_marks = mock_test.test_questions.aggregate(
+        total=Sum('question__marks')
+    )['total'] or 0.0
+    if total_marks > 0:
+        mock_test.total_marks = total_marks
+        mock_test.save(update_fields=['total_marks'])
     
     # Create generation config
     generation_config = {

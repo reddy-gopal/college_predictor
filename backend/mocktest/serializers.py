@@ -68,7 +68,7 @@ class MockTestListSerializer(serializers.ModelSerializer):
         read_only=True
     )
     questions_count = serializers.IntegerField(
-        source='questions.count',
+        source='test_questions.count',
         read_only=True
     )
     
@@ -112,7 +112,7 @@ class MockTestDetailSerializer(serializers.ModelSerializer):
         read_only=True
     )
     questions_count = serializers.IntegerField(
-        source='questions.count',
+        source='test_questions.count',
         read_only=True
     )
     
@@ -432,10 +432,24 @@ class StudentAnswerSerializer(serializers.ModelSerializer):
         write_only=True
     )
     question_text = serializers.SerializerMethodField()
+    question_number = serializers.SerializerMethodField()
     
     def get_question_text(self, obj):
         """Get question text."""
         return obj.question_bank.text if obj.question_bank else ''
+    
+    def get_question_number(self, obj):
+        """Get question number from MockTestQuestion."""
+        try:
+            # Get the question number from MockTestQuestion for this attempt's mock test
+            from .models import MockTestQuestion
+            mtq = MockTestQuestion.objects.filter(
+                mock_test=obj.attempt.mock_test,
+                question=obj.question_bank
+            ).first()
+            return mtq.question_number if mtq else None
+        except Exception:
+            return None
     
     class Meta:
         model = StudentAnswer
@@ -445,6 +459,7 @@ class StudentAnswerSerializer(serializers.ModelSerializer):
             'question',
             'question_bank_id',
             'question_text',
+            'question_number',
             'selected_option',
             'is_correct',
             'marks_obtained',
@@ -456,6 +471,7 @@ class StudentAnswerSerializer(serializers.ModelSerializer):
             'id',
             'is_correct',
             'marks_obtained',
+            'question_number',
             'created_at',
             'updated_at',
         ]

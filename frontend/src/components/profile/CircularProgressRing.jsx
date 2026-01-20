@@ -1,9 +1,23 @@
 'use client';
 
+import { useState, useEffect } from 'react';
+
 export default function CircularProgressRing({ total, completed, inProgress, abandoned }) {
+  const [isMobile, setIsMobile] = useState(false);
+  
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 640);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
   const size = 200;
   const strokeWidth = 16;
-  const radius = (size - strokeWidth) / 2;
+  const responsiveSize = isMobile ? 160 : size;
+  const radius = (responsiveSize - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
 
   const completedPercent = total > 0 ? (completed / total) * 100 : 0;
@@ -19,12 +33,12 @@ export default function CircularProgressRing({ total, completed, inProgress, aba
   const abandonedStart = inProgressStart - inProgressLength;
 
   return (
-    <div className="relative" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="transform -rotate-90">
+    <div className="relative mx-auto" style={{ width: responsiveSize, height: responsiveSize }}>
+      <svg width={responsiveSize} height={responsiveSize} className="transform -rotate-90">
         {/* Background circle */}
         <circle
-          cx={size / 2}
-          cy={size / 2}
+          cx={responsiveSize / 2}
+          cy={responsiveSize / 2}
           r={radius}
           fill="none"
           stroke="currentColor"
@@ -35,8 +49,8 @@ export default function CircularProgressRing({ total, completed, inProgress, aba
         {/* Completed (Green) */}
         {completed > 0 && (
           <circle
-            cx={size / 2}
-            cy={size / 2}
+            cx={responsiveSize / 2}
+            cy={responsiveSize / 2}
             r={radius}
             fill="none"
             stroke="currentColor"
@@ -54,8 +68,8 @@ export default function CircularProgressRing({ total, completed, inProgress, aba
         {/* In Progress (Blue) */}
         {inProgress > 0 && (
           <circle
-            cx={size / 2}
-            cy={size / 2}
+            cx={responsiveSize / 2}
+            cy={responsiveSize / 2}
             r={radius}
             fill="none"
             stroke="currentColor"
@@ -70,8 +84,8 @@ export default function CircularProgressRing({ total, completed, inProgress, aba
         {/* Abandoned (Red) */}
         {abandoned > 0 && (
           <circle
-            cx={size / 2}
-            cy={size / 2}
+            cx={responsiveSize / 2}
+            cy={responsiveSize / 2}
             r={radius}
             fill="none"
             stroke="currentColor"
@@ -86,16 +100,16 @@ export default function CircularProgressRing({ total, completed, inProgress, aba
 
       {/* Center text */}
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <div className="text-3xl font-bold text-gray-900 dark:text-white">
+        <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
           {total}
         </div>
-        <div className="text-sm text-gray-600 dark:text-gray-400">
+        <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
           Total Tests
         </div>
       </div>
 
       {/* Legend */}
-      <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 flex gap-4 text-xs whitespace-nowrap">
+      <div className="absolute -bottom-6 sm:-bottom-8 left-1/2 transform -translate-x-1/2 flex gap-2 sm:gap-4 text-xs whitespace-nowrap">
         <div className="flex items-center gap-1">
           <div className="w-3 h-3 rounded-full bg-green-500"></div>
           <span className="text-gray-600 dark:text-gray-400">{completed}</span>
@@ -112,4 +126,3 @@ export default function CircularProgressRing({ total, completed, inProgress, aba
     </div>
   );
 }
-

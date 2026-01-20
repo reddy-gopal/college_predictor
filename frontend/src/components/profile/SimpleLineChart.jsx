@@ -1,16 +1,30 @@
 'use client';
 
+import { useState, useEffect } from 'react';
+
 export default function SimpleLineChart({ data, xKey, yKey, color, xLabel, yLabel }) {
+  const [isMobile, setIsMobile] = useState(false);
+  
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 640);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
   if (!data || data.length === 0) {
     return (
-      <div className="h-64 flex items-center justify-center text-gray-500 dark:text-gray-400">
+      <div className="h-48 sm:h-64 flex items-center justify-center text-gray-500 dark:text-gray-400">
         No data available
       </div>
     );
   }
 
-  const width = 800;
-  const height = 300;
+  // Responsive width: smaller on mobile
+  const width = isMobile ? 600 : 800;
+  const height = isMobile ? 250 : 300;
   const padding = { top: 20, right: 20, bottom: 40, left: 60 };
 
   const chartWidth = width - padding.left - padding.right;
@@ -78,7 +92,7 @@ export default function SimpleLineChart({ data, xKey, yKey, color, xLabel, yLabe
 
   return (
     <div className="w-full overflow-x-auto">
-      <svg width={width} height={height} className="min-w-full">
+      <svg width={width} height={height} className="min-w-full max-w-full" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet">
         {/* Grid lines */}
         {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
           const y = padding.top + chartHeight - ratio * chartHeight;

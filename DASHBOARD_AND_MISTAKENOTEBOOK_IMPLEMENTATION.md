@@ -1,4 +1,4 @@
-# Dashboard & MistakeNotebook Implementation Guide
+# Dashboard, Profile & MistakeNotebook Implementation Guide
 
 ## 📊 Dashboard Implementation (`DashboardHome.jsx`)
 
@@ -134,6 +134,146 @@ The Dashboard is the main landing page for logged-in users. It displays personal
 
 ---
 
+## 👤 Profile Implementation (`profile/page.jsx`)
+
+### Overview
+The Profile page provides a comprehensive view of the student's performance, achievements, and activity. It includes detailed analytics, test history, and mistake insights.
+
+### Location
+- **File:** `frontend/src/app/profile/page.jsx`
+- **Route:** `/profile`
+- **Edit Route:** `/profile/edit`
+
+---
+
+## 🏗️ Profile Structure
+
+### 1. **Profile Header** (`ProfileHeader.jsx`)
+- **Location:** `frontend/src/components/profile/ProfileHeader.jsx`
+- **Content:**
+  - Profile picture (Google picture or initial avatar)
+  - Full name
+  - Email address
+  - Exam target (formatted display)
+  - Target rank (if set)
+- **Button:**
+  - **"Edit Profile"** → Redirects to `/profile/edit`
+- **Styling:** Card layout with flex arrangement
+
+---
+
+### 2. **Performance Overview** (`PerformanceOverview.jsx`)
+- **Location:** `frontend/src/components/profile/PerformanceOverview.jsx`
+- **Content:**
+  - Circular progress ring showing:
+    - Total tests attempted
+    - Tests completed
+    - Tests in progress
+    - Tests abandoned
+  - Breakdown toggle (Difficulty / Section)
+  - Performance breakdown by:
+    - **Difficulty:** Easy, Medium, Hard
+    - **Section:** Physics, Chemistry, Mathematics
+  - Each breakdown shows:
+    - Attempted count
+    - Completed count
+    - Accuracy percentage
+    - Progress bar
+- **API:** `GET /mocktest/student-profiles/me/` (for overview data)
+- **Buttons:** Toggle buttons for Difficulty/Section view
+- **No Navigation Buttons** - Display only
+
+---
+
+### 3. **Badges & Achievements** (`BadgesAndAchievements.jsx`)
+- **Location:** `frontend/src/components/profile/BadgesAndAchievements.jsx`
+- **Content:**
+  - Achievement badges
+  - XP milestones
+  - Streak achievements
+- **Buttons:** None - Display only
+
+---
+
+### 4. **Activity Heatmap** (`ActivityHeatmap.jsx`)
+- **Location:** `frontend/src/components/profile/ActivityHeatmap.jsx`
+- **Content:**
+  - Visual calendar heatmap
+  - Daily activity intensity
+  - Test completion dates
+- **Buttons:** None - Display only
+
+---
+
+### 5. **Test Attempts Summary** (`TestAttemptsSummary.jsx`)
+- **Location:** `frontend/src/components/profile/TestAttemptsSummary.jsx`
+- **Content:**
+  - **4 Summary Cards:**
+    1. **Total Tests** 📊 - Total number of test attempts
+    2. **Average Score** 📈 - Average score across all tests
+    3. **Best Score** 🏆 - Highest score achieved
+    4. **Avg Percentile** 📉 - Average percentile across all tests
+- **Button:**
+  - **"View All Attempts"** → Redirects to `/profile/test-attempts` (if implemented)
+- **API:** `GET /mocktest/test-attempts/` - Fetches user's test attempts
+- **Calculation:** Computed from test attempts data
+
+---
+
+### 6. **Performance Analytics** (`PerformanceAnalytics.jsx`)
+- **Location:** `frontend/src/components/profile/PerformanceAnalytics.jsx`
+- **Content:**
+  - Score trends over time
+  - Performance charts
+  - Improvement metrics
+- **Buttons:** None - Display only
+
+---
+
+### 7. **Mistake Insights** (`MistakeInsights.jsx`)
+- **Location:** `frontend/src/components/profile/MistakeInsights.jsx`
+- **Content:**
+  - Error type distribution
+  - Common mistake patterns
+  - Subject-wise mistake analysis
+- **Buttons:** None - Display only
+
+---
+
+## ✏️ Profile Edit Page (`profile/edit/page.jsx`)
+
+### Overview
+Allows users to edit their profile information including name, exam target, target rank, and phone number.
+
+### Location
+- **File:** `frontend/src/app/profile/edit/page.jsx`
+- **Route:** `/profile/edit`
+
+### Form Fields:
+1. **First Name** - Text input
+2. **Last Name** - Text input
+3. **Phone Number** - Tel input
+4. **Target Exam** - Dropdown select:
+   - JEE Main
+   - JEE Advanced
+   - NEET
+   - EAPCET
+   - BITSAT
+   - Other
+5. **Target Rank** - Number input
+
+### Buttons:
+- **"Cancel"** → Redirects to `/profile`
+- **"Back to Profile"** (header) → Redirects to `/profile`
+- **"Save Changes"** → Submits form and redirects to `/profile` on success
+
+### API Integration:
+- **Update:** `PATCH /accounts/profile/` via `authApi.updateProfile()`
+- **Refresh:** Calls `refreshUser()` after successful update
+- **Success Message:** Shows success notification before redirect
+
+---
+
 ## 📝 MistakeNotebook Implementation (`mistake-notebook/page.jsx`)
 
 ### Overview
@@ -243,6 +383,20 @@ Each mistake is displayed as a card with:
      - Weekly goal progress
      - Mistake review status
 
+### Profile Data Flow:
+1. **On Load:**
+   - Uses `user` from `AuthContext` (no additional fetch needed)
+   - Fetches performance overview from `/mocktest/student-profiles/me/` (if API exists)
+   - Fetches test attempts from `/mocktest/test-attempts/` for summary calculations
+   - Fetches mistakes from `/mocktest/mistake-notebook/` for insights
+
+2. **On Edit:**
+   - Loads current user data into form
+   - Validates form inputs
+   - Submits to `/accounts/profile/` via `authApi.updateProfile()`
+   - Refreshes user context after successful update
+   - Redirects to profile page
+
 ### MistakeNotebook Data Flow:
 1. **On Load:**
    - Fetches mistakes from `/mocktest/mistake-notebook/`
@@ -277,6 +431,16 @@ Each mistake is displayed as a card with:
 | Recommendations | "Explore Tests" | `/mock-tests` | Always |
 | Recommendations | "View Scholarships" | `/scholarships` | When profile exists |
 
+### Profile Buttons:
+
+| Component | Button/Link | Redirects To | Condition |
+|-----------|-------------|--------------|-----------|
+| ProfileHeader | "Edit Profile" | `/profile/edit` | Always |
+| TestAttemptsSummary | "View All Attempts" | `/profile/test-attempts` | Always (if route exists) |
+| ProfileEditPage | "Cancel" | `/profile` | Always |
+| ProfileEditPage | "Back to Profile" | `/profile` | Always |
+| ProfileEditPage | "Save Changes" | `/profile` | After successful save |
+
 ### MistakeNotebook Buttons:
 
 | Element | Button/Link | Redirects To | Condition |
@@ -297,6 +461,14 @@ Each mistake is displayed as a card with:
 - **Empty States:** Helpful messages with CTAs
 - **Hover Effects:** Cards scale on hover (Quick Actions)
 
+### Profile:
+- **Card-based Layout:** Each section in its own card
+- **Responsive Grid:** Adapts to mobile/tablet/desktop
+- **Loading States:** Skeleton loaders for async data
+- **Error Handling:** Error messages with retry buttons
+- **Dark Mode Support:** Full dark mode compatibility
+- **Circular Progress:** Visual progress indicators
+
 ### MistakeNotebook:
 - **Color-coded Error Types:** Visual distinction for error categories
 - **Collapsible Solutions:** Clean, organized display
@@ -312,6 +484,12 @@ Each mistake is displayed as a card with:
 - **Access:** Requires authentication
 - **Redirect:** Non-logged-in users see `PublicHome`
 - **Data:** All data filtered by logged-in user
+
+### Profile:
+- **Access:** Requires authentication
+- **Redirect:** Non-logged-in users redirected to `/login`
+- **Data:** Only shows data for logged-in user
+- **Edit Access:** Users can only edit their own profile
 
 ### MistakeNotebook:
 - **Access:** Requires authentication
@@ -330,10 +508,49 @@ Each mistake is displayed as a card with:
 - `GET /mocktest/daily-focus/monthly/` - Fetch monthly calendar
 - `POST /mocktest/tasks/complete/` - Complete a task (review-questions)
 
+### Profile:
+- `GET /accounts/profile/` - Fetch user profile (via AuthContext)
+- `PATCH /accounts/profile/` - Update user profile
+- `GET /mocktest/student-profiles/me/` - Fetch student profile details (if implemented)
+- `GET /mocktest/test-attempts/` - Fetch test attempts for summary
+- `GET /mocktest/mistake-notebook/` - Fetch mistakes for insights
+
+### Profile Edit:
+- `PATCH /accounts/profile/` - Update profile information
+  - Fields: `first_name`, `last_name`, `exam_target`, `target_rank`, `phone`
+
 ### MistakeNotebook:
 - `GET /mocktest/mistake-notebook/` - Fetch mistakes
 - `PATCH /mocktest/mistake-notebook/{id}/` - Update mistake (error_type, notes)
 - `POST /mocktest/mistake-notebook/generate-test/` - Generate test from mistakes
+
+---
+
+## 🗄️ Backend Models
+
+### StudentProfile Model:
+```python
+class StudentProfile(models.Model):
+    user = OneToOneField(CustomUser)
+    class_level = CharField(choices: Class_11, Class_12, Dropper, Graduate)
+    exam_target = CharField(choices: JEE_Main, JEE_Advanced, NEET, EAPCET, BITSAT, Other)
+    target_rank = PositiveIntegerField(null=True, blank=True)
+    tests_per_week = CharField(null=True, blank=True)
+    onboarding_completed = BooleanField(default=False)
+    total_xp = PositiveIntegerField(default=0)
+    created_at = DateTimeField(auto_now_add=True)
+    updated_at = DateTimeField(auto_now=True)
+```
+
+### API Endpoints (Backend):
+- `GET /mocktest/student-profiles/` - List profiles (staff only or own)
+- `GET /mocktest/student-profiles/{id}/` - Get profile details
+- `GET /mocktest/student-profiles/me/` - Get current user's profile
+- `POST /mocktest/student-profiles/` - Create profile
+- `PATCH /mocktest/student-profiles/{id}/` - Update profile
+- `DELETE /mocktest/student-profiles/{id}/` - Delete profile
+
+**Note:** Profile editing in frontend uses `/accounts/profile/` endpoint (from accounts app), not the mocktest endpoint.
 
 ---
 
@@ -346,6 +563,15 @@ Each mistake is displayed as a card with:
 ✅ Quick access to all features  
 ✅ Personalized recommendations  
 ✅ Attendance tracking  
+
+### Profile:
+✅ Comprehensive performance overview  
+✅ Visual analytics and charts  
+✅ Test history summary  
+✅ Mistake insights  
+✅ Achievement tracking  
+✅ Activity visualization  
+✅ Profile editing  
 
 ### MistakeNotebook:
 ✅ Error categorization  
@@ -364,4 +590,21 @@ Each mistake is displayed as a card with:
 3. **Mistake Removal:** Mistakes are removed from notebook only after successful test generation
 4. **Real-time Sync:** Dashboard updates automatically when user completes activities
 5. **Navigation Protection:** Test pages prevent navigation during active tests (separate feature)
+6. **Profile Data:** Profile page uses `user` from `AuthContext` - no separate API call needed for basic info
+7. **Profile Edit:** Updates both `CustomUser` (name, phone) and `StudentProfile` (exam_target, target_rank) models
+8. **Performance Overview:** Currently uses mock data fallback if API endpoint not available
+9. **Test Attempts Summary:** Calculated client-side from test attempts data
+10. **Activity Heatmap:** Implementation depends on backend API availability
 
+---
+
+## 🔗 Related Documentation
+
+- **Mocktest & Guild Implementation:** See `backend/MOCKTEST_AND_GUILD_IMPLEMENTATION.md`
+- **Gamification:** See `frontend/GAMIFICATION_IMPLEMENTATION.md`
+- **Authentication Flow:** See `frontend/AUTHENTICATION_FLOW.md`
+
+---
+
+*Last Updated: January 2026*
+*Version: 2.0 (Post QuestionBank Migration)*

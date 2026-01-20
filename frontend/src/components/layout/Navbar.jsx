@@ -94,14 +94,14 @@ export default function Navbar() {
           : 'bg-white/95 backdrop-blur-sm'
       }`}
     >
-      <div className="section-container">
-        <div className="flex items-center justify-between h-16 md:h-20">
+      <div className="section-container px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-14 sm:h-16 md:h-20">
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-2 group">
-            <div className="w-8 h-8 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center transform group-hover:scale-110 transition-transform">
-              <span className="text-white font-bold text-lg">CP</span>
+            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center transform group-hover:scale-110 transition-transform">
+              <span className="text-white font-bold text-sm sm:text-lg">CP</span>
             </div>
-            <span className="text-xl font-bold text-gray-900 hidden sm:block">
+            <span className="text-lg sm:text-xl font-bold text-gray-900 hidden sm:block">
               College Predictor
             </span>
           </Link>
@@ -199,7 +199,7 @@ export default function Navbar() {
 
           {/* Mobile Menu Button */}
           <button
-            className="md:hidden p-2 text-gray-700 hover:text-primary transition-colors"
+            className="md:hidden p-2 text-gray-700 hover:text-primary transition-colors flex-shrink-0"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             aria-label="Toggle menu"
           >
@@ -237,21 +237,23 @@ export default function Navbar() {
 
         {/* Mobile Menu */}
         {isMobileMenuOpen && (
-          <div className="md:hidden border-t border-gray-200 py-4 animate-in slide-in-from-top">
-            {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                onClick={() => setIsMobileMenuOpen(false)}
-                className={`block px-4 py-3 rounded-lg font-medium transition-all ${
-                  pathname === link.href
-                    ? 'bg-primary text-white'
-                    : 'text-gray-700 hover:bg-gray-100'
-                }`}
-              >
-                {link.label}
-              </Link>
-            ))}
+          <div className="md:hidden border-t border-gray-200 py-3 sm:py-4 max-h-[calc(100vh-4rem)] overflow-y-auto">
+            <div className="space-y-1">
+              {navLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={`block px-4 py-2.5 sm:py-3 rounded-lg text-sm sm:text-base font-medium transition-all ${
+                    pathname === link.href
+                      ? 'bg-primary text-white'
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </div>
             {/* Return to Room Button (Mobile) */}
             {activeRoom && (
               <button
@@ -267,33 +269,33 @@ export default function Navbar() {
                 Return to Room {activeRoom.code}
               </button>
             )}
-            <div className="px-4 py-3 space-y-2">
+            <div className="px-4 pt-2 pb-3 space-y-2 border-t border-gray-200 mt-2">
               {user ? (
                 <>
                   <Link
                     href="/profile"
-                    className="btn-secondary w-full text-sm py-2 text-center block"
+                    className="btn-secondary w-full text-sm py-2.5 text-center block"
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
                     Profile
                   </Link>
                   <Link
                     href="/mistake-notebook"
-                    className="btn-secondary w-full text-sm py-2 text-center block"
+                    className="btn-secondary w-full text-sm py-2.5 text-center block"
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
                     Mistake Notebook
                   </Link>
                   <Link
                     href="/profile"
-                    className="btn-secondary w-full text-sm py-2 text-center block"
+                    className="btn-secondary w-full text-sm py-2.5 text-center block"
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
                     Update Profile
                   </Link>
                   <button
                     onClick={handleLogout}
-                    className="btn-secondary w-full text-sm py-2"
+                    className="btn-secondary w-full text-sm py-2.5"
                   >
                     Logout
                   </button>
@@ -301,7 +303,7 @@ export default function Navbar() {
               ) : (
                 <Link
                   href="/login"
-                  className="btn-secondary w-full text-sm py-2 text-center block"
+                  className="btn-secondary w-full text-sm py-2.5 text-center block"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
                   Login

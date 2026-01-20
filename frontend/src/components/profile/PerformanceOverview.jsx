@@ -88,16 +88,16 @@ export default function PerformanceOverview() {
     : data?.section_breakdown;
 
   return (
-    <div className="card bg-white dark:bg-gray-800 mb-6">
-      <div className="p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+    <div className="card bg-white dark:bg-gray-800 mb-4 md:mb-6">
+      <div className="p-4 md:p-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-4 sm:mb-6">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
             Performance Overview
           </h2>
-          <div className="flex gap-2">
+          <div className="flex gap-2 w-full sm:w-auto">
             <button
               onClick={() => setBreakdownType('difficulty')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
                 breakdownType === 'difficulty'
                   ? 'bg-primary text-white'
                   : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
@@ -107,7 +107,7 @@ export default function PerformanceOverview() {
             </button>
             <button
               onClick={() => setBreakdownType('section')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
                 breakdownType === 'section'
                   ? 'bg-primary text-white'
                   : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
@@ -118,7 +118,7 @@ export default function PerformanceOverview() {
           </div>
         </div>
 
-        <div className="flex flex-col md:flex-row gap-8 items-center md:items-start">
+        <div className="flex flex-col md:flex-row gap-6 md:gap-8 items-center md:items-start">
           {/* Circular Progress Ring */}
           <div className="flex-shrink-0">
             <CircularProgressRing
@@ -132,18 +132,18 @@ export default function PerformanceOverview() {
           {/* Breakdown */}
           <div className="flex-1 w-full">
             {breakdown ? (
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 {Object.entries(breakdown).map(([key, value]) => (
-                  <div key={key} className="border-b border-gray-200 dark:border-gray-700 pb-4 last:border-0">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-semibold text-gray-900 dark:text-white capitalize">
+                  <div key={key} className="border-b border-gray-200 dark:border-gray-700 pb-3 sm:pb-4 last:border-0">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 sm:gap-0 mb-2">
+                      <span className="text-sm sm:text-base font-semibold text-gray-900 dark:text-white capitalize">
                         {key}
                       </span>
-                      <span className="text-sm text-gray-600 dark:text-gray-400">
+                      <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
                         {value.accuracy || 0}% accuracy
                       </span>
                     </div>
-                    <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+                    <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs sm:text-sm text-gray-600 dark:text-gray-400">
                       <span>Attempted: {value.attempted || 0}</span>
                       <span>Completed: {value.completed || 0}</span>
                     </div>
@@ -157,7 +157,7 @@ export default function PerformanceOverview() {
                 ))}
               </div>
             ) : (
-              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+              <div className="text-center py-6 sm:py-8 text-sm sm:text-base text-gray-500 dark:text-gray-400">
                 No breakdown data available
               </div>
             )}
