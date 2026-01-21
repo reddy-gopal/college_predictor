@@ -126,6 +126,41 @@ class CustomUser(AbstractUser):
         help_text='Comma-separated list of preferred branches'
     )
 
+    # Referral system fields
+    referral_code = models.CharField(
+        max_length=20,
+        unique=True,
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name='Referral Code',
+        help_text='Unique code for referring other users'
+    )
+    referred_by = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name='Referred By',
+        help_text='Referral code of the user who referred this user'
+    )
+    total_referrals = models.IntegerField(
+        default=0,
+        verbose_name='Total Referrals',
+        help_text='Total number of active referrals'
+    )
+    room_credits = models.IntegerField(
+        default=0,
+        verbose_name='Room Credits',
+        help_text='Available credits for creating rooms'
+    )
+    first_login_rewarded = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name='First Login Rewarded',
+        help_text='Whether the user has received their first login bonus'
+    )
+
     # Override groups and user_permissions to avoid reverse accessor clash
     groups = models.ManyToManyField(
         Group,
@@ -157,7 +192,22 @@ class CustomUser(AbstractUser):
             models.Index(fields=['email']),
             models.Index(fields=['phone']),
             models.Index(fields=['is_active', 'is_staff']),
+            models.Index(fields=['referral_code']),
+            models.Index(fields=['referred_by']),
         ]
+
+    def save(self, *args, **kwargs):
+        """Generate referral code if not set."""
+        if not self.referral_code:
+            import secrets
+            import string
+            # Generate unique 8-character referral code
+            while True:
+                code = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(8))
+                if not CustomUser.objects.filter(referral_code=code).exists():
+                    self.referral_code = code
+                    break
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.email or self.phone or self.username
@@ -324,4 +374,136 @@ class UserActivityLog(models.Model):
 
     def __str__(self):
         return f"{self.user.email} - {self.get_action_type_display()} @ {self.created_at.strftime('%Y-%m-%d %H:%M:%S')}"
+
+
+class Referral(models.Model):
+    """
+    Tracks referrals between users.
+    A referral is only counted when the referred user logs in at least once.
+    """
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        ACTIVE = 'active', 'Active'
+
+    referrer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='referrals_made',
+        db_index=True,
+        verbose_name='Referrer',
+        help_text='User who made the referral'
+    )
+    referred = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='referral_received',
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name='Referred User',
+        help_text='User who was referred (null until activation)'
+    )
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+        verbose_name='Status',
+        help_text='Referral status'
+    )
+    referral_code_used = models.CharField(
+        max_length=20,
+        db_index=True,
+        verbose_name='Referral Code Used',
+        help_text='The referral code that was used'
+    )
+    created_at = models.DateTimeField(
+        default=timezone.now,
+        db_index=True,
+        verbose_name='Created At'
+    )
+    activated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name='Activated At',
+        help_text='When the referral was activated (referred user logged in)'
+    )
+
+    class Meta:
+        verbose_name = 'Referral'
+        verbose_name_plural = 'Referrals'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['referrer', 'status']),
+            models.Index(fields=['referred', 'status']),
+            models.Index(fields=['referral_code_used']),
+            models.Index(fields=['-created_at']),
+        ]
+        # Prevent duplicate referrals from same referrer to same referred user
+        constraints = [
+            models.UniqueConstraint(
+                fields=['referrer', 'referred'],
+                condition=models.Q(referred__isnull=False),
+                name='unique_referral'
+            ),
+        ]
+
+    def __str__(self):
+        referrer_email = self.referrer.email or self.referrer.phone or str(self.referrer.id)
+        referred_email = self.referred.email or self.referred.phone or str(self.referred.id) if self.referred else 'Pending'
+        return f"{referrer_email} → {referred_email} ({self.get_status_display()})"
+
+
+class RewardHistory(models.Model):
+    """
+    Tracks all rewards given to users (first login bonus, referral bonuses).
+    """
+    class RewardType(models.TextChoices):
+        FIRST_LOGIN = 'first_login', 'First Login Bonus'
+        REFERRAL_BONUS = 'referral_bonus', 'Referral Bonus'
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='reward_history',
+        db_index=True,
+        verbose_name='User'
+    )
+    reward_type = models.CharField(
+        max_length=20,
+        choices=RewardType.choices,
+        db_index=True,
+        verbose_name='Reward Type'
+    )
+    details = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name='Details',
+        help_text='Additional context about the reward (e.g., referral count, milestone reached)'
+    )
+    credits_awarded = models.IntegerField(
+        default=0,
+        verbose_name='Credits Awarded',
+        help_text='Number of room credits awarded'
+    )
+    created_at = models.DateTimeField(
+        default=timezone.now,
+        db_index=True,
+        verbose_name='Created At'
+    )
+
+    class Meta:
+        verbose_name = 'Reward History'
+        verbose_name_plural = 'Reward Histories'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', '-created_at']),
+            models.Index(fields=['reward_type', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.email} - {self.get_reward_type_display()} - {self.credits_awarded} credits @ {self.created_at.strftime('%Y-%m-%d %H:%M:%S')}"
+
+
 

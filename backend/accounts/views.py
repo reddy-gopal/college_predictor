@@ -5,9 +5,11 @@ from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .utils import verify_google_token
-from .models import CustomUser
+from .models import CustomUser, Referral, RewardHistory
+from .referral_utils import activate_referral, award_first_login_bonus, calculate_referral_rewards, generate_unique_referral_code
 from mocktest.models import StudentProfile
 from rest_framework.decorators import api_view
+from django.db import transaction
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -64,8 +66,23 @@ def google_login(request):
             except CustomUser.DoesNotExist:
                 pass
         
+        # Get referral code from request if present
+        referral_code = request.data.get('referralCode', '').strip().upper()
+        
         # Create new user if not found
         if not user:
+            # Validate referral code if provided
+            referrer = None
+            if referral_code:
+                try:
+                    referrer = CustomUser.objects.get(referral_code=referral_code)
+                    # Prevent self-referral (though unlikely for new users)
+                    if referrer.email == email:
+                        referral_code = None
+                        referrer = None
+                except CustomUser.DoesNotExist:
+                    referral_code = None
+            
             user = CustomUser.objects.create(
                 email=email,
                 google_id=google_id,
@@ -75,8 +92,17 @@ def google_login(request):
                 google_picture=picture,
                 is_google_user=True,
                 is_active=True,
+                referred_by=referral_code if referral_code else None,
             )
             created = True
+            
+            # Create pending referral if referral code was used
+            if referral_code and referrer:
+                Referral.objects.create(
+                    referrer=referrer,
+                    referral_code_used=referral_code,
+                    status=Referral.Status.PENDING
+                )
         else:
             # Update existing user with Google info
             user.google_id = google_id
@@ -92,6 +118,28 @@ def google_login(request):
 
         # Generate JWT tokens
         refresh = RefreshToken.for_user(user)
+        
+        # Award first login bonus if not already awarded
+        first_login_bonus_awarded = False
+        if not user.first_login_rewarded:
+            bonus_result = award_first_login_bonus(user)
+            if bonus_result['success']:
+                first_login_bonus_awarded = True
+                # Refresh user from DB to get updated credits
+                user.refresh_from_db()
+                
+                # Activate referral if user was referred and this is their first login
+                referral_activated = False
+                if user.referred_by:
+                    activation_result = activate_referral(user)
+                    if activation_result['success']:
+                        referral_activated = True
+                        # Refresh user from DB to get updated credits
+                        user.refresh_from_db()
+                else:
+                    referral_activated = False
+        else:
+            referral_activated = False
         
         # Get or create StudentProfile for new users
         student_profile = None
@@ -146,12 +194,30 @@ def google_login(request):
             user_data['onboarding_completed'] = False
             user_data['total_xp'] = 0
         
-        return Response({
+        # Add referral and credit information
+        user_data['referral_code'] = user.referral_code
+        user_data['room_credits'] = user.room_credits
+        user_data['total_referrals'] = user.total_referrals
+        
+        response_data = {
             'token': str(refresh.access_token),
             'refresh': str(refresh),
             'user': user_data,
             'is_new_user': created,
-        }, status=status.HTTP_200_OK)
+        }
+        
+        # Add bonus information if awarded
+        if first_login_bonus_awarded:
+            response_data['first_login_bonus'] = {
+                'awarded': True,
+                'credits': 2,
+                'total_credits': user.room_credits
+            }
+        
+        if referral_activated:
+            response_data['referral_activated'] = True
+        
+        return Response(response_data, status=status.HTTP_200_OK)
 
     except Exception as e:
         import traceback
@@ -325,8 +391,498 @@ def get_current_user(request):
         user_data['onboarding_completed'] = False
         user_data['total_xp'] = 0
     
+    # Add referral and credit information
+    user_data['referral_code'] = user.referral_code
+    user_data['room_credits'] = user.room_credits
+    user_data['total_referrals'] = user.total_referrals
+    
     return Response({
         'user': user_data
     }, status=status.HTTP_200_OK)
 
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def activate_referral_endpoint(request):
+    """
+    Manually activate a referral (usually called after referred user logs in).
+    This endpoint can be used for non-Google signups.
+    """
+    try:
+        referred_user_id = request.data.get('referredUserId')
+        
+        if not referred_user_id:
+            return Response({
+                'detail': 'referredUserId is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            referred_user = CustomUser.objects.get(id=referred_user_id)
+        except CustomUser.DoesNotExist:
+            return Response({
+                'detail': 'Referred user not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Only the referred user can activate their own referral
+        if referred_user.id != request.user.id:
+            return Response({
+                'detail': 'You can only activate your own referral'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        result = activate_referral(referred_user)
+        
+        if result['success']:
+            return Response({
+                'message': result['message'],
+                'credits_awarded': result['credits_awarded'],
+                'total_referrals': result['total_referrals'],
+                'referrer_credits': result['referrer'].room_credits
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response({
+                'detail': result['message']
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+    except Exception as e:
+        return Response({
+            'detail': f'Failed to activate referral: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def process_referral_code(request):
+    """
+    Process a referral code for an existing user.
+    This is used when a user enters a referral code after registration.
+    """
+    try:
+        referral_code = request.data.get('referral_code', '').strip().upper()
+        
+        if not referral_code:
+            return Response({
+                'detail': 'Referral code is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        user = request.user
+        
+        # Check if user already has a referral
+        if user.referred_by:
+            return Response({
+                'detail': 'You have already used a referral code'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Find the referrer
+        try:
+            referrer = CustomUser.objects.get(referral_code=referral_code)
+        except CustomUser.DoesNotExist:
+            return Response({
+                'detail': 'Invalid referral code'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Prevent self-referral
+        if referrer.id == user.id:
+            return Response({
+                'detail': 'You cannot use your own referral code'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if referral already exists
+        existing_referral = Referral.objects.filter(
+            referrer=referrer,
+            referred=user
+        ).first()
+        
+        if existing_referral:
+            return Response({
+                'detail': 'Referral already exists'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Update user's referred_by field
+        user.referred_by = referral_code
+        user.save(update_fields=['referred_by'])
+        
+        # Create pending referral
+        referral = Referral.objects.create(
+            referrer=referrer,
+            referred=user,
+            referral_code_used=referral_code,
+            status=Referral.Status.PENDING
+        )
+        
+        # Activate the referral (since user has already logged in)
+        result = activate_referral(user)
+        
+        if result['success']:
+            return Response({
+                'message': 'Referral code processed successfully',
+                'credits_awarded': result.get('credits_awarded', 0),
+                'referrer_credits': result['referrer'].room_credits
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response({
+                'detail': result['message']
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+    except Exception as e:
+        return Response({
+            'detail': f'Failed to process referral code: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def send_otp(request):
+    """
+    Send OTP to phone number (hardcoded to 0000 for now).
+    """
+    try:
+        phone = request.data.get('phone', '').strip()
+        
+        if not phone:
+            return Response({
+                'detail': 'Phone number is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # For now, just return success (OTP is hardcoded to 0000)
+        return Response({
+            'message': 'OTP sent successfully',
+            'otp': '0000'  # Hardcoded for development
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'detail': f'Failed to send OTP: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def verify_otp(request):
+    """
+    Verify OTP for phone number (hardcoded to 0000 for now).
+    """
+    try:
+        phone = request.data.get('phone', '').strip()
+        otp = request.data.get('otp', '').strip()
+        
+        if not phone:
+            return Response({
+                'detail': 'Phone number is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not otp:
+            return Response({
+                'detail': 'OTP is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Hardcoded OTP verification (0000)
+        if otp == '0000':
+            # Update user's phone verification status if user exists
+            try:
+                user = CustomUser.objects.get(phone=phone)
+                user.is_phone_verified = True
+                user.save(update_fields=['is_phone_verified'])
+                
+                # If user was referred and phone is now verified, activate referral
+                if user.referred_by:
+                    activate_referral(user)
+            except CustomUser.DoesNotExist:
+                # User doesn't exist yet (will be created during registration)
+                pass
+            
+            return Response({
+                'message': 'Phone number verified successfully',
+                'verified': True
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response({
+                'detail': 'Invalid OTP. Please try again.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+    except Exception as e:
+        return Response({
+            'detail': f'Failed to verify OTP: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_referral_stats(request):
+    """
+    Get referral statistics for the current user.
+    """
+    user = request.user
+    
+    # Get active referrals
+    active_referrals = Referral.objects.filter(
+        referrer=user,
+        status=Referral.Status.ACTIVE
+    ).select_related('referred')
+    
+    # Get pending referrals
+    pending_referrals = Referral.objects.filter(
+        referrer=user,
+        status=Referral.Status.PENDING
+    )
+    
+    # Get reward history
+    reward_history = RewardHistory.objects.filter(
+        user=user
+    ).order_by('-created_at')[:20]  # Last 20 rewards
+    
+    # Calculate current referrals (use actual count from database for accuracy)
+    current_refs = active_referrals.count()
+    # Update user.total_referrals if it's out of sync
+    if user.total_referrals != current_refs:
+        user.total_referrals = current_refs
+        user.save(update_fields=['total_referrals'])
+    current_rewards = calculate_referral_rewards(current_refs)
+    next_milestone_refs = None
+    next_milestone_rewards = None
+    
+    if current_refs < 3:
+        next_milestone_refs = 3
+        next_milestone_rewards = 1
+    elif current_refs < 4:
+        next_milestone_refs = 4
+        next_milestone_rewards = 2
+    elif current_refs < 5:
+        next_milestone_refs = 5
+        next_milestone_rewards = 5
+    elif current_refs < 10:
+        next_milestone_refs = 10
+        next_milestone_rewards = 7
+    elif current_refs < 15:
+        next_milestone_refs = 15
+        next_milestone_rewards = 9
+    elif current_refs < 20:
+        next_milestone_refs = 20
+        next_milestone_rewards = 11
+    else:
+        # For 20+, next milestone is +5 referrals
+        next_milestone_refs = ((current_refs // 5) + 1) * 5
+        next_milestone_rewards = calculate_referral_rewards(next_milestone_refs)
+    
+    # Build referral link
+    base_url = request.build_absolute_uri('/')
+    referral_link = f"{base_url}register?ref={user.referral_code}"
+    
+    return Response({
+        'total_referrals': current_refs,  
+        'active_referrals': active_referrals.count(),
+        'pending_referrals': pending_referrals.count(),
+        'room_credits': user.room_credits,
+        'referral_code': user.referral_code,
+        'referral_link': referral_link,
+        'current_rewards': current_rewards,
+        'next_milestone': {
+            'referrals_needed': next_milestone_refs,
+            'referrals_remaining': max(0, next_milestone_refs - current_refs),
+            'rewards': next_milestone_rewards,
+            'additional_credits': next_milestone_rewards - current_rewards
+        },
+        'active_referrals_list': [
+            {
+                'id': ref.id,
+                'referred_user_email': ref.referred.email if ref.referred else None,
+                'activated_at': ref.activated_at.isoformat() if ref.activated_at else None
+            }
+            for ref in active_referrals[:10]  # Last 10 active referrals
+        ],
+        'reward_history': [
+            {
+                'id': reward.id,
+                'type': reward.reward_type,
+                'credits_awarded': reward.credits_awarded,
+                'details': reward.details,
+                'created_at': reward.created_at.isoformat()
+            }
+            for reward in reward_history
+        ]
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def register_user(request):
+    """
+    Register a new user with phone/email.
+    Accepts referral code and creates pending referral if valid.
+    """
+    try:
+        data = request.data
+        
+        # Required fields
+        phone = data.get('phone', '').strip()
+        email = data.get('email', '').strip()
+        password = data.get('password', '').strip()
+        full_name = data.get('full_name', '').strip()
+        
+        # Optional fields
+        referral_code = data.get('referral_code', '').strip().upper()
+        class_level = data.get('class_level', '').strip()
+        exam_target = data.get('exam_target', '').strip()
+        preferred_branches = data.get('preferred_branches', [])
+        
+        # Validation
+        if not phone and not email:
+            return Response({
+                'detail': 'Either phone or email is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not password:
+            return Response({
+                'detail': 'Password is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not full_name:
+            return Response({
+                'detail': 'Full name is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if user already exists
+        if email and CustomUser.objects.filter(email=email).exists():
+            return Response({
+                'detail': 'An account with this email already exists'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if phone and CustomUser.objects.filter(phone=phone).exists():
+            return Response({
+                'detail': 'An account with this phone number already exists'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Validate referral code if provided
+        referrer = None
+        if referral_code:
+            try:
+                referrer = CustomUser.objects.get(referral_code=referral_code)
+                # Prevent self-referral (though unlikely for new users)
+                if (email and referrer.email == email) or (phone and referrer.phone == phone):
+                    referral_code = None
+                    referrer = None
+            except CustomUser.DoesNotExist:
+                referral_code = None
+        
+        # Split full name into first and last name
+        name_parts = full_name.split(' ', 1)
+        first_name = name_parts[0]
+        last_name = name_parts[1] if len(name_parts) > 1 else ''
+        
+        with transaction.atomic():
+            # Get phone verification status from request (if provided)
+            is_phone_verified = request.data.get('is_phone_verified', False)
+            
+            # Create user
+            user = CustomUser.objects.create_user(
+                email=email if email else None,
+                phone=phone if phone else None,
+                password=password,
+                first_name=first_name,
+                last_name=last_name,
+                referred_by=referral_code if referral_code else None,
+                class_level=class_level if class_level else None,
+                exam_target=exam_target if exam_target else None,
+                preferred_branches=preferred_branches if preferred_branches else None,
+                is_phone_verified=is_phone_verified,
+            )
+            
+            # Generate referral code for new user
+            if not user.referral_code:
+                user.referral_code = generate_unique_referral_code()
+                user.save(update_fields=['referral_code'])
+            
+            # Create pending referral if referral code was used
+            if referral_code and referrer:
+                Referral.objects.create(
+                    referrer=referrer,
+                    referred=user,
+                    referral_code_used=referral_code,
+                    status=Referral.Status.PENDING
+                )
+            
+            # Award first login bonus
+            first_login_result = award_first_login_bonus(user)
+            
+            # Activate referral if user was referred and phone is verified
+            # Referrals will remain pending until phone is verified
+            referral_activated = False
+            if user.referred_by and referrer and user.is_phone_verified:
+                activation_result = activate_referral(user)
+                referral_activated = activation_result.get('success', False)
+                if not referral_activated:
+                    # If activation failed, log it but don't fail registration
+                    print(f"Referral activation failed: {activation_result.get('message', 'Unknown error')}")
+            # If user was referred but phone not verified, referral stays pending
+            
+            # Generate JWT tokens
+            refresh = RefreshToken.for_user(user)
+            
+            return Response({
+                'message': 'Account created successfully',
+                'user': {
+                    'id': user.id,
+                    'email': user.email,
+                    'phone': user.phone,
+                    'full_name': user.get_full_name() or full_name,
+                    'first_name': user.first_name,
+                    'last_name': user.last_name,
+                    'referral_code': user.referral_code,
+                    'referred_by': user.referred_by,
+                    'room_credits': user.room_credits,
+                    'total_referrals': user.total_referrals,
+                },
+                'token': str(refresh.access_token),
+                'refresh': str(refresh),
+                'first_login_bonus_awarded': first_login_result.get('success', False),
+                'referral_activated': referral_activated,
+            }, status=status.HTTP_201_CREATED)
+            
+    except Exception as e:
+        return Response({
+            'detail': f'Registration failed: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_referees(request):
+    """
+    Get list of users referred by the current user.
+    Returns both active and pending referrals.
+    """
+    user = request.user
+    
+    # Get all referrals where current user is the referrer
+    referrals = Referral.objects.filter(
+        referrer=user
+    ).select_related('referred').order_by('-created_at')
+    
+    referees = []
+    for referral in referrals:
+        referred_user = referral.referred
+        if not referred_user:
+            # Skip if referred user doesn't exist (shouldn't happen, but safety check)
+            continue
+        
+        # Build full name
+        first_name = referred_user.first_name or ''
+        last_name = referred_user.last_name or ''
+        full_name = f"{first_name} {last_name}".strip()
+        if not full_name:
+            full_name = referred_user.email or referred_user.phone or 'Anonymous User'
+        
+        referees.append({
+            'id': referred_user.id,
+            'email': referred_user.email,
+            'phone': referred_user.phone,
+            'full_name': full_name,
+            'status': referral.status, 
+            'joined_at': referral.created_at.isoformat(),
+            'activated_at': referral.activated_at.isoformat() if referral.activated_at else None,
+        })
+    
+    return Response({
+        'referees': referees
+    }, status=status.HTTP_200_OK)

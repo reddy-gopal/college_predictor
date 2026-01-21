@@ -59,10 +59,27 @@ def select_questions_for_room(room):
     
     # Ensure questions have required fields
     queryset = queryset.filter(
-        correct_option__isnull=False,
         difficulty_level__isnull=False,
-        subject__isnull=False
-    ).exclude(correct_option='')
+        subject__isnull=False,
+        text__isnull=False
+    ).exclude(text='')
+    
+    # Filter by correct_option based on question type:
+    # - MCQ questions MUST have non-empty correct_option (A, B, C, or D)
+    # - Integer/Numerical questions: allow even if correct_option is empty/null
+    #   (some Integer questions might store answer differently or have empty correct_option)
+    
+    # Use Q objects to handle different question types
+    # MCQ: must have valid correct_option
+    # Integer/Numerical: allowed regardless of correct_option
+    queryset = queryset.filter(
+        Q(
+            Q(question_type=QuestionBank.QuestionType.MCQ) & 
+            Q(correct_option__isnull=False) & 
+            ~Q(correct_option='')
+        ) |
+        Q(question_type__in=[QuestionBank.QuestionType.INTEGER, QuestionBank.QuestionType.NUMERICAL])
+    )
     
     available_count = queryset.count()
     requested_count = room.number_of_questions

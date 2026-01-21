@@ -327,6 +327,13 @@ class TestAttemptViewSet(viewsets.ModelViewSet):
             from rest_framework.exceptions import AuthenticationFailed
             raise AuthenticationFailed('Authentication required.')
         
+        # Check phone verification before allowing test attempts
+        if not user.is_phone_verified:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({
+                'non_field_errors': ['Please verify your phone number before taking tests. Visit your profile to verify.']
+            })
+        
         try:
             student_profile = user.student_profile
         except StudentProfile.DoesNotExist:
@@ -2061,6 +2068,14 @@ class RoomViewSet(viewsets.ModelViewSet):
     
     def create(self, request, *args, **kwargs):
         """Create a new room."""
+        # Check if user has enough room credits
+        if request.user.room_credits < 1:
+            return Response({
+                'detail': 'Insufficient room credits. You need at least 1 credit to create a room. Refer friends to earn credits!',
+                'room_credits': request.user.room_credits,
+                'credits_required': 1
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
@@ -2100,6 +2115,10 @@ class RoomViewSet(viewsets.ModelViewSet):
             return Response({
                 'detail': f'Failed to generate questions: {message}'
             }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Deduct 1 room credit from user
+        request.user.room_credits -= 1
+        request.user.save()
         
         # Add host as participant
         RoomParticipant.objects.create(
@@ -2264,10 +2283,15 @@ class RoomViewSet(viewsets.ModelViewSet):
                 'detail': 'No questions generated for this room. Please regenerate questions.'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Check if there are participants
-        if room.participants.filter(status=RoomParticipant.JOINED).count() == 0:
+        # Check if there are participants (excluding the host)
+        # The host is automatically added as a participant, so we need at least one other participant
+        other_participants = room.participants.filter(
+            status=RoomParticipant.JOINED
+        ).exclude(user=room.host)
+        
+        if other_participants.count() == 0:
             return Response({
-                'detail': 'Cannot start test with no participants.'
+                'detail': 'Please invite at least one friend to start the room.'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Start the test

@@ -103,7 +103,7 @@ class ExamAdmin(admin.ModelAdmin):
     readonly_fields = ['created_at', 'updated_at']
     fieldsets = (
         ('Basic Information', {
-            'fields': ('code', 'name', 'is_active')
+            'fields': ('code', 'name', 'is_active', 'logo')
         }),
         ('Timestamps', {
             'fields': ('created_at', 'updated_at'),

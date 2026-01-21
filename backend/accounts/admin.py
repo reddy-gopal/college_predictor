@@ -5,7 +5,7 @@ Production-ready admin interface for authentication and logging.
 """
 from django.contrib import admin
 from django.contrib.auth import get_user_model
-from .models import UserLoginLog, UserActivityLog
+from .models import UserLoginLog, UserActivityLog, Referral, RewardHistory
 
 User = get_user_model()
 
@@ -17,10 +17,10 @@ if admin.site.is_registered(User):
 @admin.register(User)
 class CustomUserAdmin(admin.ModelAdmin):
     """Admin for CustomUser model."""
-    list_display = ['email', 'phone', 'is_phone_verified', 'is_active', 'is_staff', 'date_joined']
-    list_filter = ['is_active', 'is_staff', 'is_phone_verified', 'date_joined']
-    search_fields = ['email', 'phone', 'username', 'first_name', 'last_name']
-    readonly_fields = ['date_joined', 'last_login']
+    list_display = ['email', 'phone', 'referral_code', 'room_credits', 'total_referrals', 'is_phone_verified', 'is_active', 'is_staff', 'date_joined']
+    list_filter = ['is_active', 'is_staff', 'is_phone_verified', 'first_login_rewarded', 'date_joined']
+    search_fields = ['email', 'phone', 'username', 'first_name', 'last_name', 'referral_code']
+    readonly_fields = ['date_joined', 'last_login', 'referral_code']
     fieldsets = (
         ('Authentication', {
             'fields': ('email', 'phone', 'is_phone_verified', 'password')
@@ -31,6 +31,9 @@ class CustomUserAdmin(admin.ModelAdmin):
         ('OAuth (Google)', {
             'fields': ('google_id', 'google_email', 'google_picture'),
             'classes': ('collapse',)
+        }),
+        ('Referral System', {
+            'fields': ('referral_code', 'referred_by', 'total_referrals', 'room_credits', 'first_login_rewarded')
         }),
         ('Permissions', {
             'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')
@@ -88,6 +91,46 @@ class UserActivityLogAdmin(admin.ModelAdmin):
         }),
         ('Metadata', {
             'fields': ('metadata',),
+            'classes': ('collapse',)
+        }),
+        ('Timestamp', {
+            'fields': ('created_at',)
+        }),
+    )
+
+
+@admin.register(Referral)
+class ReferralAdmin(admin.ModelAdmin):
+    """Admin for Referral model."""
+    list_display = ['referrer', 'referred', 'status', 'referral_code_used', 'created_at', 'activated_at']
+    list_filter = ['status', 'created_at', 'activated_at']
+    search_fields = ['referrer__email', 'referred__email', 'referral_code_used']
+    readonly_fields = ['created_at', 'activated_at']
+    date_hierarchy = 'created_at'
+    fieldsets = (
+        ('Referral Information', {
+            'fields': ('referrer', 'referred', 'status', 'referral_code_used')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'activated_at')
+        }),
+    )
+
+
+@admin.register(RewardHistory)
+class RewardHistoryAdmin(admin.ModelAdmin):
+    """Admin for RewardHistory model."""
+    list_display = ['user', 'reward_type', 'credits_awarded', 'created_at']
+    list_filter = ['reward_type', 'created_at']
+    search_fields = ['user__email', 'reward_type']
+    readonly_fields = ['user', 'reward_type', 'details', 'credits_awarded', 'created_at']
+    date_hierarchy = 'created_at'
+    fieldsets = (
+        ('Reward Information', {
+            'fields': ('user', 'reward_type', 'credits_awarded')
+        }),
+        ('Details', {
+            'fields': ('details',),
             'classes': ('collapse',)
         }),
         ('Timestamp', {

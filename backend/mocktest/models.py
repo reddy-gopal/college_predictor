@@ -116,6 +116,12 @@ class Exam(models.Model):
         verbose_name='Exam Name',
         help_text='Display name (e.g., JEE Main, NEET)'
     )
+    logo = models.URLField(
+        max_length=255,
+        null=True,
+        blank=True,
+        verbose_name='Exam Logo'
+    )
     is_active = models.BooleanField(
         default=True,
         db_index=True,

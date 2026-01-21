@@ -27,6 +27,7 @@ class ExamSerializer(serializers.ModelSerializer):
             'id',
             'code',
             'name',
+            'logo',
             'is_active',
             'created_at',
             'updated_at',
