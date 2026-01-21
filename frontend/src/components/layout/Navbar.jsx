@@ -125,12 +125,13 @@ export default function Navbar() {
             {activeRoom && (
               <button
                 onClick={() => router.push(`/guild/${activeRoom.code}/lobby`)}
-                className="px-4 py-2 rounded-lg font-medium transition-all duration-200 bg-green-600 text-white hover:bg-green-700 flex items-center gap-2"
+                className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 bg-green-600 text-white hover:bg-green-700 flex items-center gap-1.5"
+                title={`Return to Room ${activeRoom.code}`}
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
-                Return to Room {activeRoom.code}
+                <span>Room {activeRoom.code}</span>
               </button>
             )}
           </div>
@@ -173,6 +174,14 @@ export default function Navbar() {
                       className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                     >
                       Mistake Notebook
+                    </Link>
+                    <Link
+                      href="/referral"
+                      onClick={() => setIsProfileMenuOpen(false)}
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                    >
+                      <span>🎁</span>
+                      <span>Refer & Earn</span>
                     </Link>
                     <Link
                       href="/profile"
@@ -239,20 +248,20 @@ export default function Navbar() {
         {isMobileMenuOpen && (
           <div className="md:hidden border-t border-gray-200 py-3 sm:py-4 max-h-[calc(100vh-4rem)] overflow-y-auto">
             <div className="space-y-1">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  onClick={() => setIsMobileMenuOpen(false)}
+            {navLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                onClick={() => setIsMobileMenuOpen(false)}
                   className={`block px-4 py-2.5 sm:py-3 rounded-lg text-sm sm:text-base font-medium transition-all ${
-                    pathname === link.href
-                      ? 'bg-primary text-white'
-                      : 'text-gray-700 hover:bg-gray-100'
-                  }`}
-                >
-                  {link.label}
-                </Link>
-              ))}
+                  pathname === link.href
+                    ? 'bg-primary text-white'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                {link.label}
+              </Link>
+            ))}
             </div>
             {/* Return to Room Button (Mobile) */}
             {activeRoom && (
@@ -261,12 +270,13 @@ export default function Navbar() {
                   router.push(`/guild/${activeRoom.code}/lobby`);
                   setIsMobileMenuOpen(false);
                 }}
-                className="w-full mx-4 mt-2 px-4 py-3 rounded-lg font-medium transition-all bg-green-600 text-white hover:bg-green-700 flex items-center justify-center gap-2"
+                className="w-full mx-4 mt-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all bg-green-600 text-white hover:bg-green-700 flex items-center justify-center gap-2"
+                title={`Return to Room ${activeRoom.code}`}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
-                Return to Room {activeRoom.code}
+                <span>Room {activeRoom.code}</span>
               </button>
             )}
             <div className="px-4 pt-2 pb-3 space-y-2 border-t border-gray-200 mt-2">
@@ -278,6 +288,13 @@ export default function Navbar() {
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
                     Profile
+                  </Link>
+                  <Link
+                    href="/referral"
+                    className="btn-secondary w-full text-sm py-2.5 text-center block"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    Refer & Earn
                   </Link>
                   <Link
                     href="/mistake-notebook"

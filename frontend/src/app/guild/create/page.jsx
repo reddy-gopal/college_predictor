@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { roomApi, mockTestApi } from '@/lib/api';
+import { roomApi, mockTestApi, authApi } from '@/lib/api';
 import Link from 'next/link';
 
 export default function CreateRoomPage() {
@@ -33,6 +33,7 @@ export default function CreateRoomPage() {
   const [errors, setErrors] = useState({});
   const [summary, setSummary] = useState(null);
   const [showSummary, setShowSummary] = useState(false);
+  const [roomCredits, setRoomCredits] = useState(null);
 
   useEffect(() => {
     // Wait for auth to finish loading before checking user
@@ -47,7 +48,18 @@ export default function CreateRoomPage() {
     }
     
     fetchExams();
+    fetchUserCredits();
   }, [user, authLoading, router]);
+
+  const fetchUserCredits = async () => {
+    if (!user) return;
+    try {
+      const response = await authApi.getCurrentUser();
+      setRoomCredits(response.data.user.room_credits || 0);
+    } catch (err) {
+      console.error('Error fetching user credits:', err);
+    }
+  };
 
   const fetchExams = async () => {
     try {
@@ -180,16 +192,45 @@ export default function CreateRoomPage() {
 
       const response = await roomApi.createRoom(submitData);
       
+      console.log('Room creation response:', response);
+      
+      // Check if response has the room code
+      if (!response?.data?.code) {
+        console.error('Room creation response missing code:', response);
+        if (typeof window !== 'undefined' && window.showToast) {
+          window.showToast('Room created but code not found. Please try again.', 'error');
+        }
+        return;
+      }
+      
+      const roomCode = response.data.code;
+      console.log('Navigating to room lobby:', `/guild/${roomCode}/lobby`);
+      
       if (typeof window !== 'undefined' && window.showToast) {
         window.showToast('Room created successfully!', 'success');
       }
       
-      // Navigate to room lobby
-      router.push(`/guild/${response.data.code}/lobby`);
+      // Navigate to room lobby after a brief delay to ensure toast is shown
+      setTimeout(() => {
+        router.push(`/guild/${roomCode}/lobby`);
+      }, 500);
     } catch (err) {
       const errorMsg = err.response?.data?.detail || err.response?.data?.message || 'Failed to create room';
-      if (typeof window !== 'undefined' && window.showToast) {
-        window.showToast(errorMsg, 'error');
+      
+      // Check if it's a credit error
+      if (err.response?.status === 400 && err.response?.data?.room_credits !== undefined) {
+        // Show special message for credit error
+        if (typeof window !== 'undefined' && window.showToast) {
+          window.showToast('Insufficient room credits. Refer friends to earn credits!', 'error');
+        }
+        // Optionally redirect to referral page
+        setTimeout(() => {
+          router.push('/referral');
+        }, 2000);
+      } else {
+        if (typeof window !== 'undefined' && window.showToast) {
+          window.showToast(errorMsg, 'error');
+        }
       }
       console.error('Error creating room:', err);
     } finally {

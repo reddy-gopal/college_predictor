@@ -62,12 +62,15 @@ export default function LoginPage() {
   };
 
   const handleGoogleResponse = useCallback(async (response) => {
+    // Get referral code from URL params if present
+    const searchParams = new URLSearchParams(window.location.search);
+    const referralCode = searchParams.get('ref') || '';
     setError(null);
     setGoogleLoading(true);
 
     try {
-      // Send credential to backend
-      const result = await authApi.googleLogin(response.credential);
+      // Send credential to backend with referral code
+      const result = await authApi.googleLogin(response.credential, referralCode);
       
       const { user, token, refresh, is_new_user } = result.data;
 
@@ -76,7 +79,7 @@ export default function LoginPage() {
 
       // Redirect based on whether user is new
       if (is_new_user) {
-        router.push('/onboarding-preferences');
+        router.push('/referral-signup');
       } else {
         router.push('/');
       }

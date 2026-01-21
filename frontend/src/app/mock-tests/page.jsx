@@ -106,6 +106,7 @@ export default function MockTestsPage() {
     try {
       setLoading(true);
       const response = await mockTestApi.getExams();
+      console.log(response.data);
       setExams(response.data?.results || response.data || []);
     } catch (err) {
       setError('Failed to load exams. Please try again.');
@@ -368,11 +369,27 @@ export default function MockTestsPage() {
                   <button
                     key={exam.id}
                     onClick={() => handleExamSelect(exam)}
-                    className="card hover:shadow-xl transition-all duration-300 text-left"
+                    className="card hover:shadow-xl transition-all duration-300 text-center flex flex-col items-center justify-center p-8 min-h-[200px]"
                   >
-                    <div className="text-4xl mb-4">📋</div>
-                    <h3 className="text-xl font-bold text-gray-900 mb-2">{exam.name}</h3>
-                    <p className="text-gray-600">Click to view tests</p>
+                    <div className="mb-6 flex items-center justify-center h-20 w-full">
+                      {exam.logo ? (
+                        <img
+                          src={exam.logo}
+                          alt={exam.name}
+                          className="max-h-20 max-w-full object-contain"
+                          onError={(e) => {
+                            // Hide image and show fallback emoji
+                            e.target.style.display = 'none';
+                            const fallback = e.target.parentElement.querySelector('.exam-fallback-icon');
+                            if (fallback) {
+                              fallback.style.display = 'block';
+                            }
+                          }}
+                        />
+                      ) : null}
+                      <div className={`text-5xl exam-fallback-icon ${exam.logo ? 'hidden' : 'block'}`}>📋</div>
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-900">{exam.name}</h3>
                   </button>
                 ))}
               </div>

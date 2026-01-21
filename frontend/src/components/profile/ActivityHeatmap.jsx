@@ -77,7 +77,7 @@ export default function ActivityHeatmap() {
           attemptsByDate[dateStr].total_time += attempt.duration_minutes;
         }
       });
-
+      
       // Helper function to get local date string (YYYY-MM-DD) without timezone issues
       const getLocalDateStr = (date) => {
         const year = date.getFullYear();
@@ -85,7 +85,7 @@ export default function ActivityHeatmap() {
         const day = String(date.getDate()).padStart(2, '0');
         return `${year}-${month}-${day}`;
       };
-
+      
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const todayStr = getLocalDateStr(today);
@@ -277,7 +277,7 @@ export default function ActivityHeatmap() {
       // Fallback: last 365 days
       endDate = new Date(today);
       startDate = new Date(today);
-      startDate.setDate(startDate.getDate() - 364);
+    startDate.setDate(startDate.getDate() - 364);
     }
     startDate.setHours(0, 0, 0, 0);
     endDate.setHours(0, 0, 0, 0);
@@ -307,7 +307,7 @@ export default function ActivityHeatmap() {
       const dayOfWeek = currentDate.getDay(); // 0 = Sunday, 6 = Saturday
       const dateStr = getLocalDateStr(currentDate);
       const month = currentDate.getMonth();
-      
+
       // Add month label when we encounter the 1st of a month
       if (currentDate.getDate() === 1 || (currentDate >= startDate && month !== currentMonth)) {
         // Check if this is the first day of a month within our range
@@ -324,29 +324,29 @@ export default function ActivityHeatmap() {
       // Get data for this date
       const dayData = dataMap.get(dateStr) || {
         date: dateStr,
-        count: 0,
-        accuracy: null,
-        time_spent: 0,
-      };
-      
-      // Determine if this date is within our range
-      const isInRange = currentDate >= startDate && currentDate <= endDate;
-      const isToday = dateStr === todayStr && selectedYear === 'Current';
-      
-      // Ensure grid row has enough cells
-      while (grid[dayOfWeek].length <= weekIndex) {
-        grid[dayOfWeek].push({
-          weekIndex: grid[dayOfWeek].length,
-          date: null,
-          dayOfWeek: dayOfWeek,
-          isToday: false,
           count: 0,
           accuracy: null,
           time_spent: 0,
-          isEmpty: true,
-        });
-      }
-      
+        };
+
+      // Determine if this date is within our range
+      const isInRange = currentDate >= startDate && currentDate <= endDate;
+      const isToday = dateStr === todayStr && selectedYear === 'Current';
+
+        // Ensure grid row has enough cells
+      while (grid[dayOfWeek].length <= weekIndex) {
+        grid[dayOfWeek].push({
+          weekIndex: grid[dayOfWeek].length,
+              date: null,
+          dayOfWeek: dayOfWeek,
+              isToday: false,
+              count: 0,
+              accuracy: null,
+              time_spent: 0,
+              isEmpty: true,
+            });
+        }
+
       // Set cell data
       if (isInRange) {
         grid[dayOfWeek][weekIndex] = {
@@ -382,20 +382,20 @@ export default function ActivityHeatmap() {
     
     // Ensure all rows have the same length
     const maxWeekIndex = weekIndex;
-    for (let dow = 0; dow < 7; dow++) {
+        for (let dow = 0; dow < 7; dow++) {
       while (grid[dow].length <= maxWeekIndex) {
-        grid[dow].push({
-          weekIndex: grid[dow].length,
-          date: null,
-          dayOfWeek: dow,
-          isToday: false,
-          count: 0,
-          accuracy: null,
-          time_spent: 0,
-          isEmpty: true,
-        });
-      }
-    }
+            grid[dow].push({
+              weekIndex: grid[dow].length,
+              date: null,
+              dayOfWeek: dow,
+              isToday: false,
+              count: 0,
+              accuracy: null,
+              time_spent: 0,
+              isEmpty: true,
+            });
+          }
+        }
 
     // Sort month labels by weekIndex to ensure correct order
     monthLabels.sort((a, b) => a.weekIndex - b.weekIndex);
@@ -416,7 +416,7 @@ export default function ActivityHeatmap() {
       // For n weeks, there are (n-1) gaps between them
       monthLabels[i].width = (weekSpan * cellWidth) + ((weekSpan - 1) * gapWidth);
     }
-    
+
     // Total weeks is maxWeekIndex + 1
     const totalWeeks = maxWeekIndex + 1;
 
@@ -429,12 +429,12 @@ export default function ActivityHeatmap() {
 
   const getIntensity = (count) => {
     // Green if any test submitted, empty otherwise
-    if (count === 0) return 'bg-gray-100 dark:bg-gray-800';
-    // All submitted days get green, intensity based on count
-    if (count === 1) return 'bg-green-400 dark:bg-green-700';
-    if (count === 2 || count === 3) return 'bg-green-500 dark:bg-green-600';
-    if (count >= 4) return 'bg-green-600 dark:bg-green-500';
-    return 'bg-green-400 dark:bg-green-700';
+      if (count === 0) return 'bg-gray-100 dark:bg-gray-800';
+      // All submitted days get green, intensity based on count
+      if (count === 1) return 'bg-green-400 dark:bg-green-700';
+      if (count === 2 || count === 3) return 'bg-green-500 dark:bg-green-600';
+      if (count >= 4) return 'bg-green-600 dark:bg-green-500';
+      return 'bg-green-400 dark:bg-green-700';
   };
 
   const formatTooltip = (dayData) => {
@@ -451,9 +451,9 @@ export default function ActivityHeatmap() {
 
     const testCount = dayData.count || 0;
 
-    if (testCount === 0) {
+      if (testCount === 0) {
       return `${dateStr}: No submissions`;
-    }
+      }
     return `${dateStr}: ${testCount} ${testCount === 1 ? 'submission' : 'submissions'}`;
   };
 
@@ -515,12 +515,12 @@ export default function ActivityHeatmap() {
                   <span>
                     <span className="font-semibold">{totalTests}</span> submissions in this period
                   </span>
-                  <span>
+              <span>
                     Total active days: <span className="font-semibold">{totalActiveDays}</span>
-                  </span>
-                  <span>
-                    Max streak: <span className="font-semibold">{maxStreak}</span> days
-                  </span>
+              </span>
+              <span>
+                Max streak: <span className="font-semibold">{maxStreak}</span> days
+              </span>
                 </>
               )}
             </div>
@@ -536,7 +536,7 @@ export default function ActivityHeatmap() {
                 <option key={year} value={year}>
                   {year}
                 </option>
-              ))}
+            ))}
             </select>
           </div>
         </div>
@@ -555,7 +555,7 @@ export default function ActivityHeatmap() {
           }}>
             {/* Month labels - positioned above their corresponding weeks */}
             <div className={`flex text-xs text-gray-600 dark:text-gray-400 mb-2 relative min-w-max`} style={{ height: '20px' }}>
-              <div className="w-12 flex-shrink-0"></div>
+            <div className="w-12 flex-shrink-0"></div>
               <div className={`relative min-w-max`} style={{ position: 'relative', minWidth: `${gridData.totalWeeks * 16}px` }}>
                 {gridData.monthLabels.map((monthLabel, idx) => {
                   // Calculate the position of this month label to match grid exactly
@@ -576,9 +576,9 @@ export default function ActivityHeatmap() {
                     weekSpan = gridData.totalWeeks - monthLabel.weekIndex;
                   }
                   const labelWidth = (weekSpan * cellWidth) + ((weekSpan - 1) * gapWidth);
-                  
-                  return (
-                    <div
+
+                return (
+                  <div
                       key={idx}
                       className="absolute top-0"
                       style={{
@@ -586,73 +586,73 @@ export default function ActivityHeatmap() {
                         width: `${labelWidth}px`,
                         textAlign: 'left',
                       }}
-                    >
+                  >
                       <div className="h-3 flex items-center text-xs font-medium whitespace-nowrap">
                         {monthLabel.label}
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Heatmap grid */}
-            <div className={`flex min-w-max`}>
-              {/* Day labels (left side) - ALL days visible */}
-              <div className="w-12 flex-shrink-0 flex flex-col gap-1 text-xs text-gray-600 dark:text-gray-400">
-                {dayLabels.map((label, idx) => (
-                  <div key={idx} className="h-3 flex items-center justify-end pr-2">
-                    {label}
                   </div>
-                ))}
-              </div>
-              
-              {/* Grid cells - columns are weeks */}
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Heatmap grid */}
+            <div className={`flex min-w-max`}>
+            {/* Day labels (left side) - ALL days visible */}
+            <div className="w-12 flex-shrink-0 flex flex-col gap-1 text-xs text-gray-600 dark:text-gray-400">
+              {dayLabels.map((label, idx) => (
+                <div key={idx} className="h-3 flex items-center justify-end pr-2">
+                  {label}
+                </div>
+              ))}
+            </div>
+            
+            {/* Grid cells - columns are weeks */}
               <div className={`flex gap-1 min-w-max`} style={{ minWidth: `${gridData.totalWeeks * 16}px` }}>
-                {Array.from({ length: gridData.totalWeeks }, (_, weekIndex) => (
-                  <div
-                    key={weekIndex}
-                    className="flex flex-col gap-1"
-                  >
-                    {gridData.grid.map((row, dayOfWeek) => {
-                      // Get cell at this weekIndex (cells are indexed by weekIndex)
-                      const cell = row[weekIndex];
-                      
-                      // Handle missing cells or empty cells
-                      if (!cell || cell.isEmpty) {
-                        return (
-                          <div
-                            key={`${weekIndex}-${dayOfWeek}`}
-                            className="w-3 h-3 rounded bg-transparent"
-                          />
-                        );
-                      }
-
-                      const testCount = cell.count || 0;
-                      const tooltipText = formatTooltip(cell);
-
+              {Array.from({ length: gridData.totalWeeks }, (_, weekIndex) => (
+                <div
+                  key={weekIndex}
+                  className="flex flex-col gap-1"
+                >
+                  {gridData.grid.map((row, dayOfWeek) => {
+                    // Get cell at this weekIndex (cells are indexed by weekIndex)
+                    const cell = row[weekIndex];
+                    
+                    // Handle missing cells or empty cells
+                    if (!cell || cell.isEmpty) {
                       return (
                         <div
                           key={`${weekIndex}-${dayOfWeek}`}
+                          className="w-3 h-3 rounded bg-transparent"
+                        />
+                      );
+                    }
+
+                    const testCount = cell.count || 0;
+                    const tooltipText = formatTooltip(cell);
+
+                    return (
+                      <div
+                        key={`${weekIndex}-${dayOfWeek}`}
                           className={`w-3 h-3 rounded ${getIntensity(testCount)} ${
-                            cell.isToday 
-                              ? 'border-2 border-blue-600 dark:border-blue-400 shadow-sm' 
-                              : 'border border-gray-200 dark:border-gray-700'
-                          } cursor-pointer hover:ring-2 hover:ring-gray-400 dark:hover:ring-gray-500 transition-all relative group`}
-                          title={tooltipText}
-                        >
-                          {/* Enhanced tooltip on hover */}
-                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 dark:bg-gray-800 text-white text-xs rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
-                            {tooltipText}
-                            <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
-                              <div className="border-4 border-transparent border-t-gray-900 dark:border-t-gray-800"></div>
-                            </div>
+                          cell.isToday 
+                            ? 'border-2 border-blue-600 dark:border-blue-400 shadow-sm' 
+                            : 'border border-gray-200 dark:border-gray-700'
+                        } cursor-pointer hover:ring-2 hover:ring-gray-400 dark:hover:ring-gray-500 transition-all relative group`}
+                        title={tooltipText}
+                      >
+                        {/* Enhanced tooltip on hover */}
+                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 dark:bg-gray-800 text-white text-xs rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                          {tooltipText}
+                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
+                            <div className="border-4 border-transparent border-t-gray-900 dark:border-t-gray-800"></div>
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
               </div>
             </div>
           </div>

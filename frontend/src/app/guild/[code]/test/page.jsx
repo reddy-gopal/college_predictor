@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { roomApi } from '@/lib/api';
+import ConfirmModal from '@/components/common/ConfirmModal';
 
 export default function RoomTestPage() {
   const router = useRouter();
@@ -20,6 +21,7 @@ export default function RoomTestPage() {
   const [submitting, setSubmitting] = useState(false);
   const [testStarted, setTestStarted] = useState(false);
   const [totalDuration, setTotalDuration] = useState(0);
+  const [showSubmitModal, setShowSubmitModal] = useState(false);
 
   useEffect(() => {
     // Wait for auth to finish loading before checking user
@@ -36,10 +38,19 @@ export default function RoomTestPage() {
       return;
     }
     
+    // Check phone verification before allowing test access
+    if (user && !user.is_phone_verified) {
+      if (typeof window !== 'undefined' && window.showToast) {
+        window.showToast('Please verify your phone number to access tests', 'error');
+      }
+      router.push(`/verify-phone?redirect=/guild/${code}/test`);
+      return;
+    }
+    
     if (code) {
       fetchQuestions();
     }
-  }, [code, user, authLoading]);
+  }, [code, user, authLoading, router]);
   
   // Timer effect - separate from fetchQuestions to avoid resetting on reload
   // Timer syncs with backend's remaining_seconds which is calculated from room.start_time
@@ -205,11 +216,11 @@ export default function RoomTestPage() {
     router.push(`/guild/${code}/results`);
   };
 
-  const handleFinalSubmit = async () => {
-    if (!confirm('Are you sure you want to submit the test? This action cannot be undone.')) {
-      return;
-    }
+  const handleFinalSubmitClick = () => {
+    setShowSubmitModal(true);
+  };
 
+  const handleFinalSubmit = async () => {
     try {
       setSubmitting(true);
       
@@ -502,7 +513,7 @@ export default function RoomTestPage() {
                       
                       {currentQuestionIndex === questions.length - 1 ? (
                         <button
-                          onClick={handleFinalSubmit}
+                          onClick={handleFinalSubmitClick}
                           disabled={submitting}
                           className="px-6 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
@@ -525,6 +536,18 @@ export default function RoomTestPage() {
           </div>
         </div>
       </div>
+
+      {/* Submit Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showSubmitModal}
+        onClose={() => setShowSubmitModal(false)}
+        onConfirm={handleFinalSubmit}
+        title="Submit Test"
+        message="Are you sure you want to submit the test? This action cannot be undone. Make sure you have answered all questions."
+        confirmText="Submit Test"
+        cancelText="Cancel"
+        variant="warning"
+      />
     </div>
   );
 }

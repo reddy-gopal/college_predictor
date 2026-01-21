@@ -155,9 +155,17 @@ export const rankPredictorApi = {
 
 // Auth APIs
 export const authApi = {
-  googleLogin: (token) => api.post('/api/auth/google-login/', { token }),
+  register: (data) => api.post('/api/auth/register/', data),
+  googleLogin: (token, referralCode) => api.post('/api/auth/google-login/', { token, referralCode }),
   updateProfile: (data) => api.post('/api/auth/update-profile/', data),
   getCurrentUser: () => api.get('/api/auth/me/'),
+  // Referral APIs
+      activateReferral: (referredUserId) => api.post('/api/auth/referral/activate/', { referredUserId }),
+      processReferralCode: (referralCode) => api.post('/api/auth/referral/process/', { referral_code: referralCode }),
+      getReferralStats: () => api.get('/api/auth/referral/stats/'),
+      getReferees: () => api.get('/api/auth/referee/'),
+      sendOTP: (phone) => api.post('/api/auth/send-otp/', { phone }),
+      verifyOTP: (phone, otp) => api.post('/api/auth/verify-otp/', { phone, otp }),
 };
 
 export default api;

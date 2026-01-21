@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { roomApi } from '@/lib/api';
+import ConfirmModal from '@/components/common/ConfirmModal';
 
 export default function WaitingLobbyPage() {
   const router = useRouter();
@@ -16,6 +17,10 @@ export default function WaitingLobbyPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [countdown, setCountdown] = useState(null);
+  const [isStarting, setIsStarting] = useState(false);
+  const [showKickModal, setShowKickModal] = useState(false);
+  const [showStartModal, setShowStartModal] = useState(false);
+  const [kickUserId, setKickUserId] = useState(null);
 
   useEffect(() => {
     // Wait for auth to finish loading before checking user
@@ -89,17 +94,21 @@ export default function WaitingLobbyPage() {
     }
   };
 
-  const handleKick = async (userId) => {
-    if (!confirm('Are you sure you want to kick this participant?')) {
-      return;
-    }
+  const handleKickClick = (userId) => {
+    setKickUserId(userId);
+    setShowKickModal(true);
+  };
+
+  const handleKick = async () => {
+    if (!kickUserId) return;
 
     try {
-      await roomApi.kickParticipant(code, userId);
+      await roomApi.kickParticipant(code, kickUserId);
       if (typeof window !== 'undefined' && window.showToast) {
         window.showToast('Participant kicked successfully', 'success');
       }
       fetchParticipants();
+      setKickUserId(null);
     } catch (err) {
       const errorMsg = err.response?.data?.detail || 'Failed to kick participant';
       if (typeof window !== 'undefined' && window.showToast) {
@@ -108,26 +117,70 @@ export default function WaitingLobbyPage() {
     }
   };
 
-  const handleStart = async () => {
-    if (!confirm('Are you sure you want to start this test? All participants will begin immediately.')) {
-      return;
-    }
+  const handleStartClick = () => {
+    setShowStartModal(true);
+  };
 
-    try {
-      await roomApi.startRoom(code);
-      if (typeof window !== 'undefined' && window.showToast) {
-        window.showToast('Test started!', 'success');
+  const handleStart = async () => {
+    // Start countdown
+    setIsStarting(true);
+    setCountdown(3);
+
+    // Countdown timer
+    const countdownInterval = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev === null || prev <= 1) {
+          clearInterval(countdownInterval);
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    // After countdown completes, start the room
+    setTimeout(async () => {
+      clearInterval(countdownInterval);
+      setIsStarting(false);
+      setCountdown(null);
+
+      try {
+        await roomApi.startRoom(code);
+        if (typeof window !== 'undefined' && window.showToast) {
+          window.showToast('Test started!', 'success');
+        }
+        fetchRoom();
+      } catch (err) {
+        const errorMsg = err.response?.data?.detail || 'Failed to start room';
+        if (typeof window !== 'undefined' && window.showToast) {
+          window.showToast(errorMsg, 'error');
+        }
       }
-      fetchRoom();
-    } catch (err) {
-      const errorMsg = err.response?.data?.detail || 'Failed to start room';
-      if (typeof window !== 'undefined' && window.showToast) {
-        window.showToast(errorMsg, 'error');
-      }
-    }
+    }, 3000); // 3 seconds for countdown
   };
 
   const isHost = room?.is_host || room?.host === user?.id || room?.host_email === user?.email;
+  
+  // Filter out the host from participants count (host is automatically a participant)
+  // We need to identify the host by comparing user IDs or emails
+  const hostId = room?.host || room?.host_id;
+  const hostEmail = room?.host_email;
+  
+  const otherParticipants = participants.filter(p => {
+    const participantUserId = p.user || p.user_id;
+    const participantEmail = p.user_email || p.email;
+    
+    // Exclude if this participant is the host
+    if (hostId && participantUserId) {
+      return String(participantUserId) !== String(hostId);
+    }
+    if (hostEmail && participantEmail) {
+      return participantEmail !== hostEmail;
+    }
+    // If we can't determine, include them (shouldn't happen)
+    return true;
+  });
+  
+  const hasOtherParticipants = otherParticipants.length > 0;
 
   if (authLoading || loading) {
     return (
@@ -228,16 +281,16 @@ export default function WaitingLobbyPage() {
                 <h2 className="text-xl font-bold text-gray-900 mb-4">Host Controls</h2>
                 <div className="space-y-3">
                   <button
-                    onClick={handleStart}
-                    disabled={participants.length === 0}
+                    onClick={handleStartClick}
+                    disabled={!hasOtherParticipants}
                     className="w-full px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Start Test
                   </button>
-                  <p className="text-sm text-gray-600">
-                    {participants.length === 0 
-                      ? 'Wait for at least one participant to join'
-                      : `${participants.length} participant(s) ready`}
+                  <p className={`text-sm ${!hasOtherParticipants ? 'text-red-600 font-medium' : 'text-gray-600'}`}>
+                    {!hasOtherParticipants 
+                      ? 'Invite at least one friend to Start the Room'
+                      : `${otherParticipants.length} participant(s) ready`}
                   </p>
                 </div>
               </div>
@@ -268,7 +321,7 @@ export default function WaitingLobbyPage() {
                     </div>
                     {isHost && room.status === 'waiting' && participant.user !== user?.id && (
                       <button
-                        onClick={() => handleKick(participant.user)}
+                        onClick={() => handleKickClick(participant.user)}
                         className="px-3 py-1 text-red-600 hover:bg-red-50 rounded text-sm font-medium transition-colors"
                       >
                         Kick
@@ -290,6 +343,60 @@ export default function WaitingLobbyPage() {
           </div>
         )}
       </div>
+
+      {/* Confirmation Modals */}
+      <ConfirmModal
+        isOpen={showKickModal}
+        onClose={() => {
+          setShowKickModal(false);
+          setKickUserId(null);
+        }}
+        onConfirm={handleKick}
+        title="Kick Participant"
+        message="Are you sure you want to kick this participant? They will be removed from the room."
+        confirmText="Kick"
+        cancelText="Cancel"
+        variant="danger"
+      />
+
+      <ConfirmModal
+        isOpen={showStartModal}
+        onClose={() => setShowStartModal(false)}
+        onConfirm={handleStart}
+        title="Start Test"
+        message="Are you sure you want to start this test? All participants will begin immediately."
+        confirmText="Start Test"
+        cancelText="Cancel"
+        variant="default"
+      />
+
+      {/* Countdown Overlay */}
+      {isStarting && countdown !== null && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center">
+          <div className="relative">
+            {/* Animated background circle */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-64 h-64 bg-primary/20 rounded-full animate-ping"></div>
+            </div>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-56 h-56 bg-primary/30 rounded-full animate-pulse"></div>
+            </div>
+            
+            {/* Main countdown display */}
+            <div className="relative bg-gradient-to-br from-white to-gray-50 rounded-3xl p-16 text-center shadow-2xl border-4 border-primary/30">
+              <div className="text-[180px] md:text-[240px] font-black text-primary mb-6 leading-none animate-bounce">
+                {countdown}
+              </div>
+              <p className="text-3xl md:text-4xl text-gray-800 font-bold mb-2">
+                Test Starting In
+              </p>
+              <p className="text-lg text-gray-600 font-medium">
+                Get ready!
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

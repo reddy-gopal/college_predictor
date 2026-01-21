@@ -10,17 +10,21 @@ export default function RegisterPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const prefillPhone = searchParams.get('phone') || '';
+  const referralCodeFromUrl = searchParams.get('ref') || '';
 
   const [formData, setFormData] = useState({
     full_name: '',
     phone: prefillPhone,
-    class_level: '',
-    exam_target: '',
-    preferred_branches: [],
+    email: '',
+    password: '',
   });
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [otpSent, setOtpSent] = useState(false);
+  const [otp, setOtp] = useState('');
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [phoneVerified, setPhoneVerified] = useState(false);
   const { login, loginWithGoogle } = useAuth();
   const googleInitialized = useRef(false);
   const buttonContainerRef = useRef(null);
@@ -36,8 +40,9 @@ export default function RegisterPage() {
     setGoogleLoading(true);
 
     try {
-      // Send credential to backend
-      const result = await authApi.googleLogin(response.credential);
+      // Referral code will be handled in referral-signup page
+      // Send credential to backend without referral code for now
+      const result = await authApi.googleLogin(response.credential, '');
       
       const { user, token, refresh, is_new_user } = result.data;
 
@@ -46,7 +51,7 @@ export default function RegisterPage() {
 
       // Redirect based on whether user is new
       if (is_new_user) {
-        router.push('/onboarding-preferences');
+        router.push('/referral-signup');
       } else {
         router.push('/');
       }
@@ -143,35 +148,96 @@ export default function RegisterPage() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleBranchToggle = (branch) => {
-    setFormData((prev) => {
-      const branches = prev.preferred_branches || [];
-      const newBranches = branches.includes(branch)
-        ? branches.filter((b) => b !== branch)
-        : [...branches, branch];
-      return { ...prev, preferred_branches: newBranches };
-    });
+  const handleSendOTP = async () => {
+    if (formData.phone.length !== 10) {
+      setError('Please enter a valid 10-digit phone number');
+      return;
+    }
+
+    setOtpLoading(true);
+    setError(null);
+
+    try {
+      await authApi.sendOTP(formData.phone);
+      setOtpSent(true);
+      if (typeof window !== 'undefined' && window.showToast) {
+        window.showToast('OTP sent successfully! Use code: 0000', 'success');
+      }
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to send OTP. Please try again.');
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleVerifyOTP = async () => {
+    if (otp.length !== 4) {
+      setError('Please enter a valid 4-digit OTP');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      await authApi.verifyOTP(formData.phone, otp);
+      setPhoneVerified(true);
+      setOtpSent(false);
+      setOtp('');
+      if (typeof window !== 'undefined' && window.showToast) {
+        window.showToast('Phone number verified successfully!', 'success');
+      }
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Invalid OTP. Please try again.');
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
+    
+    // Check if phone is verified
+    if (!phoneVerified) {
+      setError('Please verify your phone number before registering');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      // TODO: Call registration API
-      // For now, redirect to onboarding since registration API is not implemented
-      // The user will complete onboarding which will create their profile
-      router.push('/onboarding-preferences');
+      // Call registration API
+      const registrationData = {
+        full_name: formData.full_name,
+        phone: formData.phone,
+        email: formData.email || undefined,
+        password: formData.password,
+        is_phone_verified: phoneVerified,  // Pass verification status
+        // Referral code will be handled in referral-signup page
+      };
+
+      const response = await authApi.register(registrationData);
+      
+      const { user, token, refresh } = response.data;
+
+      // Save token and login user
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('auth_token', token);
+        sessionStorage.setItem('refresh_token', refresh);
+      }
+
+      // Update auth context
+      await login(user, token);
+
+      // Redirect to referral signup page first
+      router.push('/referral-signup');
     } catch (err) {
       setError(
-        err.response?.data?.message || 'Registration failed. Please try again.'
+        err.response?.data?.detail || err.response?.data?.message || 'Registration failed. Please try again.'
       );
       setLoading(false);
     }
   };
-
-  const commonBranches = ['CSE', 'ECE', 'ME', 'CE', 'EE', 'IT'];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/5 via-white to-secondary/5 flex items-center justify-center px-6 py-12">
@@ -217,93 +283,111 @@ export default function RegisterPage() {
               >
                 Phone Number *
               </label>
+              <div className="flex gap-2">
+                <input
+                  type="tel"
+                  id="phone"
+                  name="phone"
+                  value={formData.phone}
+                  onChange={(e) => {
+                    const newPhone = e.target.value.replace(/\D/g, '').slice(0, 10);
+                    setFormData((prev) => ({ ...prev, phone: newPhone }));
+                    // Reset verification if phone changes
+                    if (newPhone !== formData.phone) {
+                      setPhoneVerified(false);
+                      setOtpSent(false);
+                      setOtp('');
+                    }
+                  }}
+                  required
+                  disabled={phoneVerified}
+                  className="input-field flex-1"
+                  placeholder="Enter your 10-digit phone number"
+                />
+                <button
+                  type="button"
+                  onClick={handleSendOTP}
+                  disabled={formData.phone.length !== 10 || otpLoading || phoneVerified}
+                  className="px-4 py-2 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                >
+                  {otpLoading ? 'Sending...' : phoneVerified ? '✓ Verified' : 'Send OTP'}
+                </button>
+              </div>
+              {phoneVerified && (
+                <p className="text-xs text-green-600 mt-1">✓ Phone number verified</p>
+              )}
+            </div>
+
+            {otpSent && !phoneVerified && (
+              <div>
+                <label
+                  htmlFor="otp"
+                  className="block text-sm font-semibold text-gray-700 mb-2"
+                >
+                  Enter OTP *
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    id="otp"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                    required
+                    className="input-field flex-1"
+                    placeholder="Enter 4-digit OTP"
+                    maxLength={4}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleVerifyOTP}
+                    disabled={otp.length !== 4 || loading}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                  >
+                    Verify
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  OTP sent to {formData.phone}. Use code: <strong>0000</strong>
+                </p>
+              </div>
+            )}
+
+            <div>
+              <label
+                htmlFor="email"
+                className="block text-sm font-semibold text-gray-700 mb-2"
+              >
+                Email (Optional)
+              </label>
               <input
-                type="tel"
-                id="phone"
-                name="phone"
-                value={formData.phone}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    phone: e.target.value.replace(/\D/g, '').slice(0, 10),
-                  }))
-                }
-                required
+                type="email"
+                id="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
                 className="input-field"
-                placeholder="Enter your 10-digit phone number"
+                placeholder="Enter your email address"
               />
             </div>
 
             <div>
               <label
-                htmlFor="class_level"
+                htmlFor="password"
                 className="block text-sm font-semibold text-gray-700 mb-2"
               >
-                Class Level *
+                Password *
               </label>
-              <select
-                id="class_level"
-                name="class_level"
-                value={formData.class_level}
+              <input
+                type="password"
+                id="password"
+                name="password"
+                value={formData.password}
                 onChange={handleChange}
                 required
+                minLength={6}
                 className="input-field"
-              >
-                <option value="">Select class level</option>
-                <option value="class_11">Class 11</option>
-                <option value="class_12">Class 12</option>
-                <option value="dropper">Dropper</option>
-                <option value="graduate">Graduate</option>
-              </select>
-            </div>
-
-            <div>
-              <label
-                htmlFor="exam_target"
-                className="block text-sm font-semibold text-gray-700 mb-2"
-              >
-                Exam Target *
-              </label>
-              <select
-                id="exam_target"
-                name="exam_target"
-                value={formData.exam_target}
-                onChange={handleChange}
-                required
-                className="input-field"
-              >
-                <option value="">Select your target exam</option>
-                <option value="jee_main">JEE Main</option>
-                <option value="jee_advanced">JEE Advanced</option>
-                <option value="neet">NEET</option>
-                <option value="eapcet">EAPCET</option>
-                <option value="bitsat">BITSAT</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-3">
-                Preferred Branches (Optional)
-              </label>
-              <div className="flex flex-wrap gap-3">
-                {commonBranches.map((branch) => (
-                  <button
-                    key={branch}
-                    type="button"
-                    onClick={() => handleBranchToggle(branch.toLowerCase())}
-                    className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                      formData.preferred_branches?.includes(
-                        branch.toLowerCase()
-                      )
-                        ? 'bg-primary text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    {branch}
-                  </button>
-                ))}
-              </div>
+                placeholder="Enter a password (min 6 characters)"
+              />
             </div>
 
             {error && (

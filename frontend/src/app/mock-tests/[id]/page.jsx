@@ -2,11 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
 import { mockTestApi } from '@/lib/api';
 
 export default function MockTestAttemptPage() {
   const params = useParams();
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   // Extract only the numeric ID from params.id (in case it includes extra text)
   // This handles cases where the URL might have been malformed
   const testId = params.id ? String(params.id).split('/')[0].trim() : null;
@@ -23,8 +25,22 @@ export default function MockTestAttemptPage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
+    // Wait for auth to finish loading
+    if (authLoading) {
+      return;
+    }
+    
+    // Check phone verification before allowing test access
+    if (user && !user.is_phone_verified) {
+      if (typeof window !== 'undefined' && window.showToast) {
+        window.showToast('Please verify your phone number to access tests', 'error');
+      }
+      router.push(`/verify-phone?redirect=/mock-tests/${testId}`);
+      return;
+    }
+    
     loadTest();
-  }, [testId]);
+  }, [testId, user, authLoading, router]);
 
   useEffect(() => {
     if (timeRemaining !== null && timeRemaining > 0) {
