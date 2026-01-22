@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 
 export default function CircularProgressRing({ total, completed, inProgress, abandoned }) {
   const [isMobile, setIsMobile] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   
   useEffect(() => {
     const checkMobile = () => {
@@ -33,7 +34,19 @@ export default function CircularProgressRing({ total, completed, inProgress, aba
   const abandonedStart = inProgressStart - inProgressLength;
 
   return (
-    <div className="relative mx-auto" style={{ width: responsiveSize, height: responsiveSize }}>
+    <div 
+      className="relative mx-auto" 
+      style={{ width: responsiveSize, height: responsiveSize }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      {/* Tooltip */}
+      {isHovered && (
+        <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-niat-text text-white px-3 py-2 rounded-lg shadow-lg text-xs whitespace-nowrap z-10">
+          No of correct answers {completed}
+          <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-niat-text rotate-45"></div>
+        </div>
+      )}
       <svg width={responsiveSize} height={responsiveSize} className="transform -rotate-90">
         {/* Background circle */}
         <circle
@@ -43,7 +56,7 @@ export default function CircularProgressRing({ total, completed, inProgress, aba
           fill="none"
           stroke="currentColor"
           strokeWidth={strokeWidth}
-          className="text-gray-200 dark:text-gray-700"
+          className="text-niat-border"
         />
         
         {/* Completed (Green) */}
@@ -81,7 +94,7 @@ export default function CircularProgressRing({ total, completed, inProgress, aba
           />
         )}
 
-        {/* Abandoned (Red) */}
+        {/* Wrong (Red) */}
         {abandoned > 0 && (
           <circle
             cx={responsiveSize / 2}
@@ -100,28 +113,23 @@ export default function CircularProgressRing({ total, completed, inProgress, aba
 
       {/* Center text */}
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
-          {total}
-        </div>
-        <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
-          Total Tests
+        <div className="text-2xl sm:text-3xl font-bold text-niat-text">
+          {completed.toLocaleString()} / {total.toLocaleString()}
         </div>
       </div>
 
       {/* Legend */}
-      <div className="absolute -bottom-6 sm:-bottom-8 left-1/2 transform -translate-x-1/2 flex gap-2 sm:gap-4 text-xs whitespace-nowrap">
+      <div className="absolute -bottom-6 sm:-bottom-8 left-1/2 transform -translate-x-1/2 flex flex-col sm:flex-row gap-2 sm:gap-4 text-xs whitespace-nowrap">
         <div className="flex items-center gap-1">
           <div className="w-3 h-3 rounded-full bg-green-500"></div>
-          <span className="text-gray-600 dark:text-gray-400">{completed}</span>
+          <span className="text-niat-text-secondary">Correct: {completed}</span>
         </div>
-        <div className="flex items-center gap-1">
-          <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-          <span className="text-gray-600 dark:text-gray-400">{inProgress}</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <div className="w-3 h-3 rounded-full bg-red-500"></div>
-          <span className="text-gray-600 dark:text-gray-400">{abandoned}</span>
-        </div>
+        {abandoned > 0 && (
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 rounded-full bg-red-500"></div>
+            <span className="text-niat-text-secondary">Wrong: {abandoned}</span>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -63,13 +63,13 @@ export default function TestAttemptsSummary() {
 
   if (loading) {
     return (
-      <div className="card bg-white dark:bg-gray-800 mb-6">
+      <div className="card bg-white mb-6">
         <div className="p-6">
           <div className="animate-pulse">
-            <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-48 mb-6"></div>
+            <div className="h-6 bg-gray-200 rounded w-48 mb-6"></div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-24 bg-gray-200 dark:bg-gray-700 rounded-lg"></div>
+                <div key={i} className="h-24 bg-gray-200 rounded-lg"></div>
               ))}
             </div>
           </div>
@@ -80,9 +80,9 @@ export default function TestAttemptsSummary() {
 
   if (error && !summary) {
     return (
-      <div className="card bg-white dark:bg-gray-800 mb-6">
+      <div className="card bg-white mb-6">
         <div className="p-6 text-center">
-          <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
+          <p className="text-red-600 mb-4">{error}</p>
           <button onClick={fetchSummary} className="btn-primary">
             Try Again
           </button>
@@ -92,10 +92,10 @@ export default function TestAttemptsSummary() {
   }
 
   return (
-    <div className="card bg-white dark:bg-gray-800 mb-4 md:mb-6">
+    <div className="card bg-white mb-4 md:mb-6">
       <div className="p-4 md:p-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-4 sm:mb-6">
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
+          <h2 className="text-xl sm:text-2xl font-bold text-niat-text">
             Test Attempts Summary
           </h2>
           <button
@@ -139,8 +139,8 @@ export default function TestAttemptsSummary() {
 
 function SummaryCard({ label, value, icon, color }) {
   const colorClasses = {
-    primary: 'from-primary/10 to-primary/5 border-primary/20',
-    secondary: 'from-secondary/10 to-secondary/5 border-secondary/20',
+    primary: 'from-niat-primary/10 to-niat-primary/5 border-niat-primary/20',
+    secondary: 'from-accent-2/10 to-accent-2/5 border-accent-2/20',
     'accent-1': 'from-accent-1/10 to-accent-1/5 border-accent-1/20',
     'accent-2': 'from-accent-2/10 to-accent-2/5 border-accent-2/20',
   };
@@ -148,10 +148,10 @@ function SummaryCard({ label, value, icon, color }) {
   return (
     <div className={`p-3 sm:p-4 rounded-lg border-2 bg-gradient-to-br ${colorClasses[color]} text-center`}>
       <div className="text-2xl sm:text-3xl mb-1 sm:mb-2">{icon}</div>
-      <div className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-1">
+      <div className="text-xl sm:text-2xl font-bold text-niat-text mb-1">
         {value}
       </div>
-      <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">{label}</div>
+      <div className="text-xs sm:text-sm text-niat-text-secondary">{label}</div>
     </div>
   );
 }

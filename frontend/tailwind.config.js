@@ -8,13 +8,22 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        niat: {
+          primary: '#991B1B',
+          navbar: '#FFF8EB',
+          section: '#FBF2F3',
+          text: '#1E293B',
+          'text-secondary': 'rgba(30,41,59,0.7)',
+          border: 'rgba(30,41,59,0.1)',
+        },
+        // Keep legacy colors for backward compatibility during transition
         primary: {
-          DEFAULT: '#3d348b', // Indigo Velvet
-          light: '#5d4fa3',
-          dark: '#2d2569',
+          DEFAULT: '#991B1B', // NIAT Primary
+          light: '#B91C1C',
+          dark: '#7F1D1D',
         },
         secondary: {
-          DEFAULT: '#7678ed', // Medium Slate Blue
+          DEFAULT: '#7678ed', // Keep for gradients/accents
           light: '#9496f0',
           dark: '#5a5cb8',
         },

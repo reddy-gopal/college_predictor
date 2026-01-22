@@ -20,7 +20,7 @@ export default function ProfileHeader({ user }) {
   };
 
   return (
-    <div className="card bg-white dark:bg-gray-800 mb-4 md:mb-6">
+    <div className="card bg-[#FBF2F3] mb-4 md:mb-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6 p-4 md:p-6">
         {/* Profile Image */}
         <div className="flex-shrink-0 mx-auto sm:mx-0">
@@ -28,10 +28,10 @@ export default function ProfileHeader({ user }) {
             <img
               src={user.google_picture}
               alt={fullName}
-              className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border-4 border-primary/20"
+              className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border-4 border-niat-primary/20"
             />
           ) : (
-            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white text-2xl sm:text-3xl font-bold border-4 border-primary/20">
+            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-niat-primary to-accent-1 flex items-center justify-center text-white text-2xl sm:text-3xl font-bold border-4 border-niat-primary/20">
               {fullName.charAt(0).toUpperCase()}
             </div>
           )}
@@ -39,23 +39,23 @@ export default function ProfileHeader({ user }) {
 
         {/* User Info */}
         <div className="flex-1 min-w-0 w-full sm:w-auto text-center sm:text-left">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-1 sm:mb-2">
+          <h1 className="text-2xl sm:text-3xl font-bold text-niat-text mb-1 sm:mb-2">
             {fullName}
           </h1>
-          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mb-2 sm:mb-3 break-words">
+          <p className="text-sm sm:text-base text-niat-text-secondary mb-2 sm:mb-3 break-words">
             {user?.email}
           </p>
           <div className="flex flex-col sm:flex-row flex-wrap items-center sm:items-center gap-2 sm:gap-4 text-xs sm:text-sm">
             <div className="flex items-center gap-2">
-              <span className="text-gray-500 dark:text-gray-400">Exam Target:</span>
-              <span className="font-semibold text-gray-900 dark:text-white">
+              <span className="text-niat-text-secondary">Exam Target:</span>
+              <span className="font-semibold text-niat-text">
                 {examDisplay}
               </span>
             </div>
             {user?.target_rank && (
               <div className="flex items-center gap-2">
-                <span className="text-gray-500 dark:text-gray-400">Target Rank:</span>
-                <span className="font-semibold text-gray-900 dark:text-white">
+                <span className="text-niat-text-secondary">Target Rank:</span>
+                <span className="font-semibold text-niat-text">
                   {user.target_rank.toLocaleString()}
                 </span>
               </div>

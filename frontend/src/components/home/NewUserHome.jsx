@@ -24,10 +24,10 @@ export default function NewUserHome() {
   };
 
   return (
-    <div className="pt-16 md:pt-20 min-h-screen bg-gray-50">
+    <div className="pt-16 md:pt-20 min-h-screen bg-white">
       <div className="section-container py-12">
         {/* Greeting */}
-        <div className="card bg-gradient-to-r from-primary to-secondary text-white mb-8">
+        <div className="card bg-gradient-to-r from-[#220000] to-[#974039] text-white mb-8">
           <h1 className="text-3xl font-bold mb-2">
             Welcome, {name}! 👋
           </h1>

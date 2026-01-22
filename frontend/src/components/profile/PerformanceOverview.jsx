@@ -18,26 +18,50 @@ export default function PerformanceOverview() {
     try {
       setLoading(true);
       setError(null);
-      const response = await mockTestApi.getProfileOverview();
-      setData(response.data);
-    } catch (err) {
-      console.error('Error fetching profile overview:', err);
-      setError('Failed to load performance overview');
-      // Use mock data for development
+      // Fetch questions performance overview (real-time data)
+      const questionsResponse = await mockTestApi.getQuestionsPerformanceOverview();
+      const questionsData = questionsResponse.data;
+      
+      // Transform the data to match the existing component structure
+      // For difficulty breakdown, use accuracy_by_difficulty
+      const difficultyBreakdown = {};
+      if (questionsData.accuracy_by_difficulty) {
+        Object.entries(questionsData.accuracy_by_difficulty).forEach(([level, stats]) => {
+          difficultyBreakdown[level] = {
+            attempted: stats.total_attempted || 0,
+            completed: stats.correct || 0,
+            accuracy: stats.accuracy || 0,
+          };
+        });
+      }
+      
+      // For section breakdown, we'll keep the old structure for now
+      // (can be updated later if section data is available)
+      const sectionBreakdown = {};
+      
       setData({
-        tests_attempted: 15,
-        tests_completed: 12,
-        tests_in_progress: 2,
-        tests_abandoned: 1,
-        difficulty_breakdown: {
-          easy: { attempted: 5, completed: 5, accuracy: 85 },
-          medium: { attempted: 7, completed: 5, accuracy: 72 },
-          hard: { attempted: 3, completed: 2, accuracy: 58 },
+        difficulty_breakdown: difficultyBreakdown,
+        section_breakdown: sectionBreakdown,
+        // Question data for CircularProgressRing
+        questions_data: {
+          total_correct: questionsData.total_correct_questions || 0,
+          total_attempted: questionsData.total_attempted_questions || 0,
+          total_wrong: questionsData.total_wrong_questions || 0,
+          overall_accuracy: questionsData.overall_accuracy || 0,
         },
-        section_breakdown: {
-          physics: { attempted: 8, completed: 7, accuracy: 75 },
-          chemistry: { attempted: 6, completed: 5, accuracy: 80 },
-          mathematics: { attempted: 7, completed: 6, accuracy: 70 },
+      });
+    } catch (err) {
+      console.error('Error fetching performance overview:', err);
+      setError('Failed to load performance overview');
+      // Fallback to empty data structure
+      setData({
+        difficulty_breakdown: {},
+        section_breakdown: {},
+        questions_data: {
+          total_correct: 0,
+          total_attempted: 0,
+          total_wrong: 0,
+          overall_accuracy: 0,
         },
       });
     } finally {
@@ -47,16 +71,16 @@ export default function PerformanceOverview() {
 
   if (loading) {
     return (
-      <div className="card bg-white dark:bg-gray-800 mb-6">
+      <div className="card bg-[#FFF8EB] mb-6">
         <div className="p-6">
           <div className="animate-pulse">
-            <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-48 mb-6"></div>
+            <div className="h-6 bg-white/60 rounded w-48 mb-6"></div>
             <div className="flex flex-col md:flex-row gap-6">
-              <div className="w-48 h-48 bg-gray-200 dark:bg-gray-700 rounded-full mx-auto"></div>
+              <div className="w-48 h-48 bg-white/60 rounded-full mx-auto"></div>
               <div className="flex-1 space-y-4">
-                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
-                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
-                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-2/3"></div>
+                <div className="h-4 bg-white/60 rounded w-3/4"></div>
+                <div className="h-4 bg-white/60 rounded w-1/2"></div>
+                <div className="h-4 bg-white/60 rounded w-2/3"></div>
               </div>
             </div>
           </div>
@@ -67,9 +91,9 @@ export default function PerformanceOverview() {
 
   if (error && !data) {
     return (
-      <div className="card bg-white dark:bg-gray-800 mb-6">
+      <div className="card bg-[#FFF8EB] mb-6">
         <div className="p-6 text-center">
-          <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
+          <p className="text-red-600 mb-4">{error}</p>
           <button onClick={fetchOverview} className="btn-primary">
             Try Again
           </button>
@@ -78,20 +102,20 @@ export default function PerformanceOverview() {
     );
   }
 
-  const total = data?.tests_attempted || 0;
-  const completed = data?.tests_completed || 0;
-  const inProgress = data?.tests_in_progress || 0;
-  const abandoned = data?.tests_abandoned || 0;
+  // Use question data for CircularProgressRing
+  const totalCorrect = data?.questions_data?.total_correct || 0;
+  const totalAttempted = data?.questions_data?.total_attempted || 0;
+  const totalWrong = data?.questions_data?.total_wrong || 0;
 
   const breakdown = breakdownType === 'difficulty' 
     ? data?.difficulty_breakdown 
     : data?.section_breakdown;
 
   return (
-    <div className="card bg-white dark:bg-gray-800 mb-4 md:mb-6">
+    <div className="card bg-[#FFF8EB] mb-4 md:mb-6">
       <div className="p-4 md:p-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-4 sm:mb-6">
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
+          <h2 className="text-xl sm:text-2xl font-bold text-niat-text">
             Performance Overview
           </h2>
           <div className="flex gap-2 w-full sm:w-auto">
@@ -99,8 +123,8 @@ export default function PerformanceOverview() {
               onClick={() => setBreakdownType('difficulty')}
               className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
                 breakdownType === 'difficulty'
-                  ? 'bg-primary text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  ? 'bg-niat-primary text-white shadow-sm'
+                  : 'bg-white text-niat-text hover:bg-white/80 border border-niat-border'
               }`}
             >
               Difficulty
@@ -109,8 +133,8 @@ export default function PerformanceOverview() {
               onClick={() => setBreakdownType('section')}
               className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
                 breakdownType === 'section'
-                  ? 'bg-primary text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  ? 'bg-niat-primary text-white shadow-sm'
+                  : 'bg-white text-niat-text hover:bg-white/80 border border-niat-border'
               }`}
             >
               Section
@@ -122,43 +146,59 @@ export default function PerformanceOverview() {
           {/* Circular Progress Ring */}
           <div className="flex-shrink-0">
             <CircularProgressRing
-              total={total}
-              completed={completed}
-              inProgress={inProgress}
-              abandoned={abandoned}
+              total={totalAttempted}
+              completed={totalCorrect}
+              inProgress={0}
+              abandoned={totalWrong}
             />
           </div>
 
           {/* Breakdown */}
           <div className="flex-1 w-full">
-            {breakdown ? (
+            {breakdown && Object.keys(breakdown).length > 0 ? (
               <div className="space-y-3 sm:space-y-4">
                 {Object.entries(breakdown).map(([key, value]) => (
-                  <div key={key} className="border-b border-gray-200 dark:border-gray-700 pb-3 sm:pb-4 last:border-0">
+                  <div key={key} className="border-b border-niat-border/50 pb-3 sm:pb-4 last:border-0">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 sm:gap-0 mb-2">
-                      <span className="text-sm sm:text-base font-semibold text-gray-900 dark:text-white capitalize">
+                      <span className="text-sm sm:text-base font-semibold text-niat-text capitalize">
                         {key}
                       </span>
-                      <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                      <span className="text-xs sm:text-sm text-niat-text-secondary">
                         {value.accuracy || 0}% accuracy
                       </span>
                     </div>
-                    <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                    <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs sm:text-sm text-niat-text-secondary">
                       <span>Attempted: {value.attempted || 0}</span>
-                      <span>Completed: {value.completed || 0}</span>
+                      <span>Correct: {value.completed || 0}</span>
                     </div>
-                    <div className="mt-2 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div className="mt-2 w-full bg-white/80 rounded-full h-2">
                       <div
-                        className="bg-primary h-2 rounded-full transition-all duration-300"
+                        className="bg-niat-primary h-2 rounded-full transition-all duration-300 shadow-sm"
                         style={{ width: `${((value.completed || 0) / (value.attempted || 1)) * 100}%` }}
                       ></div>
                     </div>
                   </div>
                 ))}
+                {/* Display question statistics if available */}
+                {data?.questions_data && (
+                  <div className="mt-4 pt-4 border-t border-niat-border/50 space-y-3">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                      <span className="text-sm font-semibold text-niat-text">
+                        Correctly Attempted
+                      </span>
+                      <span className="text-lg font-bold text-niat-primary">
+                        {data.questions_data.total_correct || 0}
+                      </span>
+                    </div>
+                    <div className="text-xs text-niat-text-secondary mt-1">
+                      Out of {data.questions_data.total_attempted || 0} questions attempted • {data.questions_data.overall_accuracy || 0}% accuracy
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
-              <div className="text-center py-6 sm:py-8 text-sm sm:text-base text-gray-500 dark:text-gray-400">
-                No breakdown data available
+              <div className="text-center py-6 sm:py-8 text-sm sm:text-base text-niat-text-secondary">
+                No breakdown data available. Complete some tests to see your performance!
               </div>
             )}
           </div>

@@ -67,9 +67,9 @@ export default function ProfileEditPage() {
 
   if (!user) {
     return (
-      <div className="pt-16 md:pt-20 min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+      <div className="pt-16 md:pt-20 min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
-          <p className="text-gray-600 dark:text-gray-400 mb-4">Please log in to edit your profile.</p>
+          <p className="text-niat-text-secondary mb-4">Please log in to edit your profile.</p>
           <button
             onClick={() => router.push('/login')}
             className="btn-primary"
@@ -82,13 +82,13 @@ export default function ProfileEditPage() {
   }
 
   return (
-    <div className="pt-16 md:pt-20 min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="pt-16 md:pt-20 min-h-screen bg-white">
       <div className="section-container py-12">
         <div className="max-w-2xl mx-auto">
           {/* Header */}
-          <div className="card bg-white dark:bg-gray-800 mb-6">
+          <div className="card bg-white mb-6">
             <div className="flex items-center justify-between mb-4">
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Edit Profile</h1>
+              <h1 className="text-3xl font-bold text-niat-text">Edit Profile</h1>
               <button
                 onClick={() => router.push('/profile')}
                 className="btn-secondary"
@@ -99,15 +99,15 @@ export default function ProfileEditPage() {
           </div>
 
           {/* Profile Information */}
-          <div className="card bg-white dark:bg-gray-800">
+          <div className="card bg-white">
             {error && (
-              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-400 px-4 py-3 rounded-lg text-sm mb-4">
+              <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg text-sm mb-4">
                 {error}
               </div>
             )}
 
             {success && (
-              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-400 px-4 py-3 rounded-lg text-sm mb-4">
+              <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg text-sm mb-4">
                 {success}
               </div>
             )}
@@ -117,7 +117,7 @@ export default function ProfileEditPage() {
                 {/* Name Fields */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                    <label className="block text-sm font-semibold text-niat-text mb-2">
                       First Name
                     </label>
                     <input
@@ -130,7 +130,7 @@ export default function ProfileEditPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                    <label className="block text-sm font-semibold text-niat-text mb-2">
                       Last Name
                     </label>
                     <input
@@ -146,7 +146,7 @@ export default function ProfileEditPage() {
 
                 {/* Phone */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  <label className="block text-sm font-semibold text-niat-text mb-2">
                     Phone Number
                   </label>
                   <input
@@ -161,7 +161,7 @@ export default function ProfileEditPage() {
 
                 {/* Exam Target */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  <label className="block text-sm font-semibold text-niat-text mb-2">
                     Target Exam
                   </label>
                   <select
@@ -182,7 +182,7 @@ export default function ProfileEditPage() {
 
                 {/* Target Rank */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  <label className="block text-sm font-semibold text-niat-text mb-2">
                     Target Rank
                   </label>
                   <input
@@ -197,7 +197,7 @@ export default function ProfileEditPage() {
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex gap-4 pt-6 border-t border-gray-200 dark:border-gray-700">
+                <div className="flex gap-4 pt-6 border-t border-niat-border">
                   <button
                     type="button"
                     onClick={() => router.push('/profile')}

@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 
 export default function SimpleLineChart({ data, xKey, yKey, color, xLabel, yLabel }) {
   const [isMobile, setIsMobile] = useState(false);
+  const [hoveredPoint, setHoveredPoint] = useState(null);
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
   
   useEffect(() => {
     const checkMobile = () => {
@@ -90,6 +92,28 @@ export default function SimpleLineChart({ data, xKey, yKey, color, xLabel, yLabe
     return value;
   };
 
+  // Format date for tooltip
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  // Handle mouse events
+  const handlePointMouseEnter = (e, index) => {
+    const point = points[index];
+    setHoveredPoint({
+      index,
+      data: data[index],
+      x: point.x,
+      y: point.y
+    });
+  };
+
+  const handlePointMouseLeave = () => {
+    setHoveredPoint(null);
+  };
+
   return (
     <div className="w-full overflow-x-auto">
       <svg width={width} height={height} className="min-w-full max-w-full" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet">
@@ -160,10 +184,50 @@ export default function SimpleLineChart({ data, xKey, yKey, color, xLabel, yLabe
             key={i}
             cx={point.x}
             cy={point.y}
-            r="4"
+            r={hoveredPoint?.index === i ? "6" : "4"}
             fill={strokeColor}
+            className="cursor-pointer transition-all"
+            onMouseEnter={(e) => handlePointMouseEnter(e, i)}
+            onMouseLeave={handlePointMouseLeave}
           />
         ))}
+
+        {/* Tooltip */}
+        {hoveredPoint && (
+          <g>
+            {/* Tooltip background */}
+            <rect
+              x={hoveredPoint.x - 70}
+              y={hoveredPoint.y - 55}
+              width="140"
+              height="45"
+              rx="6"
+              fill="rgba(0, 0, 0, 0.85)"
+              className="pointer-events-none"
+              style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))' }}
+            />
+            {/* Tooltip text - Date */}
+            <text
+              x={hoveredPoint.x}
+              y={hoveredPoint.y - 35}
+              textAnchor="middle"
+              className="text-xs fill-white pointer-events-none"
+              style={{ fontFamily: 'system-ui, sans-serif' }}
+            >
+              {formatDate(hoveredPoint.data[xKey]) || hoveredPoint.data[xKey]}
+            </text>
+            {/* Tooltip text - Value */}
+            <text
+              x={hoveredPoint.x}
+              y={hoveredPoint.y - 18}
+              textAnchor="middle"
+              className="text-sm fill-white pointer-events-none font-semibold"
+              style={{ fontFamily: 'system-ui, sans-serif' }}
+            >
+              {yLabel}: {typeof hoveredPoint.data[yKey] === 'number' ? hoveredPoint.data[yKey].toFixed(1) : hoveredPoint.data[yKey]}
+            </text>
+          </g>
+        )}
 
         {/* Axes */}
         <line

@@ -38,12 +38,12 @@ export default function PublicHome() {
       {/* Hero Section */}
       <section className="section-container py-12 md:py-20">
         <div className="text-center max-w-4xl mx-auto">
-          <h1 className="text-4xl md:text-6xl font-bold text-gray-900 mb-6 leading-tight">
+          <h1 className="text-4xl md:text-6xl font-bold text-niat-text mb-6 leading-tight">
             Practice Smart.{' '}
             <span className="text-gradient">Predict Your Rank.</span>{' '}
             Choose the Right College.
           </h1>
-          <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
+          <p className="text-xl text-niat-text-secondary mb-8 max-w-2xl mx-auto">
             Comprehensive platform for competitive exam preparation with mock
             tests, college prediction, and rank estimation.
           </p>
@@ -62,7 +62,7 @@ export default function PublicHome() {
       </section>
 
       {/* How It Works Demo Section */}
-      <section id="how-it-works" className="section-container py-16 bg-white">
+      <section id="how-it-works" className="section-container py-16 bg-niat-section">
         <div className="text-center mb-12">
           <h2 className="section-title">How It Works</h2>
           <p className="section-subtitle">
@@ -132,7 +132,7 @@ export default function PublicHome() {
       </section>
 
       {/* Features Section */}
-      <section className="section-container py-16 bg-gray-50">
+      <section className="section-container py-16 bg-niat-section">
         <div className="text-center mb-12">
           <h2 className="section-title">Why Choose Us</h2>
           <p className="section-subtitle">
@@ -170,10 +170,10 @@ export default function PublicHome() {
       <section className="section-container py-16">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            <h2 className="text-2xl font-bold text-niat-text mb-2">
               Trusted by Thousands of Students
             </h2>
-            <p className="text-gray-600">
+            <p className="text-niat-text-secondary">
               Join students who are achieving their dreams
             </p>
           </div>
@@ -210,7 +210,7 @@ export default function PublicHome() {
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link
               href="/onboarding"
-              className="bg-white text-primary px-8 py-4 rounded-lg font-semibold hover:bg-gray-100 transition-colors inline-block text-center"
+              className="bg-white text-niat-primary px-8 py-4 rounded-lg font-semibold hover:bg-niat-section transition-colors inline-block text-center"
             >
               Get Started Free
             </Link>
@@ -241,8 +241,8 @@ function FeatureCard({ icon, title, description, href, color, disabled }) {
       }`}
     >
       <div className="text-4xl mb-4">{icon}</div>
-      <h3 className="text-xl font-bold text-gray-900 mb-2">{title}</h3>
-      <p className="text-gray-600">{description}</p>
+      <h3 className="text-xl font-bold text-niat-text mb-2">{title}</h3>
+      <p className="text-niat-text-secondary">{description}</p>
     </div>
   );
 
@@ -260,8 +260,8 @@ function DemoStep({ step, icon, title, description }) {
         {step}
       </div>
       <div className="text-4xl mb-3">{icon}</div>
-      <h3 className="text-xl font-bold text-gray-900 mb-2">{title}</h3>
-      <p className="text-gray-600">{description}</p>
+      <h3 className="text-xl font-bold text-niat-text mb-2">{title}</h3>
+      <p className="text-niat-text-secondary">{description}</p>
     </div>
   );
 }
@@ -279,7 +279,7 @@ function DemoCard({ title, features, color }) {
         {features.map((feature, index) => (
           <li key={index} className="flex items-start gap-2">
             <span className="text-primary mt-1">✓</span>
-            <span className="text-gray-700">{feature}</span>
+            <span className="text-niat-text">{feature}</span>
           </li>
         ))}
       </ul>
@@ -291,10 +291,10 @@ function TestimonialCard({ quote, author, exam }) {
   return (
     <div className="card text-center">
       <div className="text-4xl mb-4">⭐</div>
-      <p className="text-gray-700 mb-4 italic">&quot;{quote}&quot;</p>
+      <p className="text-niat-text mb-4 italic">&quot;{quote}&quot;</p>
       <div className="text-sm">
-        <div className="font-semibold text-gray-900">{author}</div>
-        <div className="text-gray-600">{exam} Aspirant</div>
+        <div className="font-semibold text-niat-text">{author}</div>
+        <div className="text-niat-text-secondary">{exam} Aspirant</div>
       </div>
     </div>
   );

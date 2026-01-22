@@ -84,13 +84,13 @@ export default function MistakeInsights() {
 
   if (loading) {
     return (
-      <div className="card bg-white dark:bg-gray-800 mb-6">
+      <div className="card bg-white mb-6">
         <div className="p-6">
           <div className="animate-pulse">
-            <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-48 mb-6"></div>
+            <div className="h-6 bg-gray-200 rounded w-48 mb-6"></div>
             <div className="space-y-4">
-              <div className="h-20 bg-gray-200 dark:bg-gray-700 rounded"></div>
-              <div className="h-20 bg-gray-200 dark:bg-gray-700 rounded"></div>
+              <div className="h-20 bg-gray-200 rounded"></div>
+              <div className="h-20 bg-gray-200 rounded"></div>
             </div>
           </div>
         </div>
@@ -100,9 +100,9 @@ export default function MistakeInsights() {
 
   if (error && !insights) {
     return (
-      <div className="card bg-white dark:bg-gray-800 mb-6">
+      <div className="card bg-white mb-6">
         <div className="p-6 text-center">
-          <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
+          <p className="text-red-600 mb-4">{error}</p>
           <button onClick={fetchInsights} className="btn-primary">
             Try Again
           </button>
@@ -112,10 +112,10 @@ export default function MistakeInsights() {
   }
 
   return (
-    <div className="card bg-white dark:bg-gray-800 mb-4 md:mb-6">
+    <div className="card bg-white mb-4 md:mb-6">
       <div className="p-4 md:p-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-4 sm:mb-6">
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
+          <h2 className="text-xl sm:text-2xl font-bold text-niat-text">
             Mistake Insights
           </h2>
           <button
@@ -129,19 +129,19 @@ export default function MistakeInsights() {
         {insights?.total_mistakes === 0 ? (
           <div className="text-center py-6 sm:py-8">
             <div className="text-3xl sm:text-4xl mb-3 sm:mb-4">🎉</div>
-            <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
+            <p className="text-sm sm:text-base text-niat-text-secondary">
               No mistakes recorded yet. Keep practicing!
             </p>
           </div>
         ) : (
           <div className="space-y-4 sm:space-y-6">
             {/* Total Mistakes */}
-            <div className="p-3 sm:p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+            <div className="p-3 sm:p-4 bg-gray-50 rounded-lg">
               <div className="flex items-center justify-between">
-                <span className="text-sm sm:text-base text-gray-700 dark:text-gray-300 font-medium">
+                <span className="text-sm sm:text-base text-niat-text font-medium">
                   Total Mistakes
                 </span>
-                <span className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
+                <span className="text-xl sm:text-2xl font-bold text-niat-text">
                   {insights?.total_mistakes || 0}
                 </span>
               </div>
@@ -150,26 +150,26 @@ export default function MistakeInsights() {
             {/* Top Weak Subjects */}
             {insights?.top_weak_subjects && insights.top_weak_subjects.length > 0 && (
               <div>
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-2 sm:mb-3">
+                <h3 className="text-base sm:text-lg font-semibold text-niat-text mb-2 sm:mb-3">
                   Top Weak Subjects
                 </h3>
                 <div className="space-y-2">
                   {insights.top_weak_subjects.map((item, index) => (
                     <div
                       key={item.subject}
-                      className="flex items-center justify-between p-2 sm:p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
+                      className="flex items-center justify-between p-2 sm:p-3 bg-gray-50 rounded-lg"
                     >
                       <div className="flex items-center gap-2 sm:gap-3">
-                        <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                          <span className="text-primary font-bold text-xs sm:text-sm">
+                        <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-niat-primary/10 flex items-center justify-center flex-shrink-0">
+                          <span className="text-niat-primary font-bold text-xs sm:text-sm">
                             {index + 1}
                           </span>
                         </div>
-                        <span className="text-sm sm:text-base font-medium text-gray-900 dark:text-white capitalize">
+                        <span className="text-sm sm:text-base font-medium text-niat-text capitalize">
                           {item.subject}
                         </span>
                       </div>
-                      <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                      <span className="text-xs sm:text-sm text-niat-text-secondary">
                         {item.count} mistakes
                       </span>
                     </div>
@@ -180,12 +180,12 @@ export default function MistakeInsights() {
 
             {/* Most Common Error Type */}
             {insights?.most_common_error_type && (
-              <div className="p-3 sm:p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+              <div className="p-3 sm:p-4 bg-red-50 rounded-lg border border-red-200">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
-                  <span className="text-sm sm:text-base text-gray-700 dark:text-gray-300 font-medium">
+                  <span className="text-sm sm:text-base text-niat-text font-medium">
                     Most Common Error Type
                   </span>
-                  <span className="text-sm sm:text-base font-semibold text-red-700 dark:text-red-400">
+                  <span className="text-sm sm:text-base font-semibold text-red-700">
                     {getErrorTypeLabel(insights.most_common_error_type)}
                   </span>
                 </div>

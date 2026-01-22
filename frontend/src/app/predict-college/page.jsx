@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { collegePredictorApi } from '@/lib/api';
 import CollegeCard from '@/components/CollegeCard';
+import HowItWorks from '@/components/predictor/HowItWorks';
+import FAQ from '@/components/predictor/FAQ';
 
 export default function PredictCollegePage() {
   const [formData, setFormData] = useState({
@@ -380,7 +382,7 @@ export default function PredictCollegePage() {
             </div>
 
             {/* Back to Form */}
-            <div className="text-center py-8 bg-white rounded-xl shadow-md">
+            <div className="text-center py-8 bg-white rounded-xl shadow-md mb-8">
               <button
                 onClick={() => {
                   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -390,6 +392,139 @@ export default function PredictCollegePage() {
                 ↑ Back to Form
               </button>
             </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* How It Works & FAQ - Full Width Below Results */}
+      {results.length > 0 && (
+        <div className="w-full bg-gray-50 py-12">
+          <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto w-full px-4 sm:px-6 lg:px-8">
+            {/* How It Works */}
+            <div className="mb-8">
+              <HowItWorks
+                title="How College Prediction Works"
+                steps={[
+                  {
+                    icon: '🔢',
+                    title: 'Enter Your Rank',
+                    description: 'Input your exam rank obtained in the competitive examination. This is the primary factor for college eligibility.',
+                  },
+                  {
+                    icon: '📑',
+                    title: 'Select Filters',
+                    description: 'Choose your exam type, category (General, OBC, SC, ST, etc.), optional home state, and preferred branches.',
+                  },
+                  {
+                    icon: '🔍',
+                    title: 'Rank Matching Algorithm',
+                    description: 'Our system matches your rank against historical cutoff data. We find colleges where your rank falls within the opening and closing rank range for that category.',
+                  },
+                  {
+                    icon: '🎓',
+                    title: 'Get Eligible Colleges',
+                    description: 'Receive a comprehensive list of colleges and courses you\'re eligible for, filtered by your preferences and ranked by historical cutoff trends.',
+                  },
+                ]}
+              />
+            </div>
+
+            {/* FAQ */}
+            <FAQ
+              items={[
+                {
+                  question: 'How accurate is the college prediction?',
+                  answer: 'Our predictions are based on historical cutoff data from previous years. The accuracy depends on how closely the current year\'s trends match historical patterns. We show colleges where your rank falls within the opening and closing rank range for that specific exam, category, and branch combination.',
+                },
+                {
+                  question: 'What if no colleges are found for my rank?',
+                  answer: 'If no colleges are found, it means your rank is higher than the closing ranks for available colleges in your selected category. Try adjusting your rank slightly, selecting a different category, or removing state/branch filters to see more options.',
+                },
+                {
+                  question: 'Can I filter by multiple branches?',
+                  answer: 'Yes! You can select multiple preferred branches (CSE, ECE, ME, etc.). The system will show colleges that offer any of your selected branches and where your rank qualifies.',
+                },
+                {
+                  question: 'How does the state filter work?',
+                  answer: 'The state filter is optional. If you select a specific state, you\'ll only see colleges from that state. If left blank, you\'ll see colleges from all states. Some exams have state-specific quotas, so this filter helps you find colleges in your preferred location.',
+                },
+                {
+                  question: 'Are the results based on current year data?',
+                  answer: 'The predictions use the most recent available cutoff data in our database. Cutoff data is typically updated after each exam cycle. The results reflect historical trends and should be used as a guide for college selection.',
+                },
+                {
+                  question: 'Is my data saved when I use the predictor?',
+                  answer: 'No, we do not store your personal rank or prediction data. Your inputs are processed in real-time to generate results and are not saved on our servers.',
+                },
+              ]}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* How It Works & FAQ - Full Width Below Form if No Results */}
+      {results.length === 0 && (
+        <div className="w-full bg-gray-50 py-12">
+          <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto w-full px-4 sm:px-6 lg:px-8">
+            {/* How It Works */}
+            <div className="mb-8">
+              <HowItWorks
+                title="How College Prediction Works"
+                steps={[
+                  {
+                    icon: '🔢',
+                    title: 'Enter Your Rank',
+                    description: 'Input your exam rank obtained in the competitive examination. This is the primary factor for college eligibility.',
+                  },
+                  {
+                    icon: '📑',
+                    title: 'Select Filters',
+                    description: 'Choose your exam type, category (General, OBC, SC, ST, etc.), optional home state, and preferred branches.',
+                  },
+                  {
+                    icon: '🔍',
+                    title: 'Rank Matching Algorithm',
+                    description: 'Our system matches your rank against historical cutoff data. We find colleges where your rank falls within the opening and closing rank range for that category.',
+                  },
+                  {
+                    icon: '🎓',
+                    title: 'Get Eligible Colleges',
+                    description: 'Receive a comprehensive list of colleges and courses you\'re eligible for, filtered by your preferences and ranked by historical cutoff trends.',
+                  },
+                ]}
+              />
+            </div>
+
+            {/* FAQ */}
+            <FAQ
+              items={[
+                {
+                  question: 'How accurate is the college prediction?',
+                  answer: 'Our predictions are based on historical cutoff data from previous years. The accuracy depends on how closely the current year\'s trends match historical patterns. We show colleges where your rank falls within the opening and closing rank range for that specific exam, category, and branch combination.',
+                },
+                {
+                  question: 'What if no colleges are found for my rank?',
+                  answer: 'If no colleges are found, it means your rank is higher than the closing ranks for available colleges in your selected category. Try adjusting your rank slightly, selecting a different category, or removing state/branch filters to see more options.',
+                },
+                {
+                  question: 'Can I filter by multiple branches?',
+                  answer: 'Yes! You can select multiple preferred branches (CSE, ECE, ME, etc.). The system will show colleges that offer any of your selected branches and where your rank qualifies.',
+                },
+                {
+                  question: 'How does the state filter work?',
+                  answer: 'The state filter is optional. If you select a specific state, you\'ll only see colleges from that state. If left blank, you\'ll see colleges from all states. Some exams have state-specific quotas, so this filter helps you find colleges in your preferred location.',
+                },
+                {
+                  question: 'Are the results based on current year data?',
+                  answer: 'The predictions use the most recent available cutoff data in our database. Cutoff data is typically updated after each exam cycle. The results reflect historical trends and should be used as a guide for college selection.',
+                },
+                {
+                  question: 'Is my data saved when I use the predictor?',
+                  answer: 'No, we do not store your personal rank or prediction data. Your inputs are processed in real-time to generate results and are not saved on our servers.',
+                },
+              ]}
+            />
           </div>
         </div>
       )}

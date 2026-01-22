@@ -141,15 +141,17 @@ export default function DashboardHome() {
   };
 
   return (
-    <div className="pt-16 md:pt-20 min-h-screen bg-gray-50">
+    <div className="pt-16 md:pt-20 min-h-screen bg-white">
       <div className="section-container py-6">
         {/* Greeting Header */}
-        <div className="card bg-gradient-to-r from-primary to-secondary text-white mb-6">
+        <div className="card bg-gradient-to-r from-[#220000] to-[#974039] text-white mb-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold mb-1">{name} 👋</h1>
-              <p className="text-white/90">
-                {examDisplay}
+              <h1 className="text-2xl font-bold mb-1">
+                Welcome back, {name}! 👋
+              </h1>
+              <p className="text-white/90 text-lg">
+                Ready to ace your <span className="font-semibold">{examDisplay}</span>? Let's make today count! 🚀
               </p>
             </div>
           </div>
@@ -193,13 +195,13 @@ function ProgressInsights({ activity }) {
   // Only show if there are real test attempts with complete data
   if (recentTests.length === 0) {
     return (
-      <div className="card mb-6">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">
+      <div className="mb-6 rounded-xl shadow-md border border-niat-border p-6 bg-[#FBF2F3]">
+        <h2 className="text-xl font-bold text-niat-text mb-4">
           Recent Performance
         </h2>
         <div className="text-center py-8">
           <div className="text-4xl mb-4">📊</div>
-          <p className="text-gray-600 mb-6">
+          <p className="text-niat-text-secondary mb-6">
             No test attempts yet. Complete a mock test to see your performance here.
           </p>
           <Link
@@ -230,8 +232,8 @@ function ProgressInsights({ activity }) {
   const maxHeight = '400px';
 
   return (
-    <div className="card mb-6">
-      <h2 className="text-xl font-bold text-gray-900 mb-4">
+    <div className="mb-6 rounded-xl shadow-md border border-niat-border p-6 bg-[#FBF2F3]">
+      <h2 className="text-xl font-bold text-niat-text mb-4">
         Recent Performance
       </h2>
       <div 
@@ -241,7 +243,7 @@ function ProgressInsights({ activity }) {
         {recentTests.map((test, index) => (
           <div
             key={index}
-            className="flex items-center justify-between p-3 bg-gray-50 rounded-lg flex-shrink-0"
+            className="flex items-center justify-between p-3 bg-white rounded-lg flex-shrink-0 border border-niat-border"
           >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -250,19 +252,19 @@ function ProgressInsights({ activity }) {
                 </span>
               </div>
               <div>
-                <div className="font-medium text-gray-900">
+                <div className="font-medium text-niat-text">
                   {test.testTitle}
                 </div>
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-niat-text-secondary">
                   {new Date(test.dateISO).toLocaleDateString()}
                 </div>
               </div>
             </div>
             <div className="text-right flex-shrink-0">
-              <div className="font-semibold text-gray-900">
+              <div className="font-semibold text-niat-text">
                 {test.score.toFixed(1)}
               </div>
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-niat-text-secondary">
                 {test.percentile.toFixed(1)}%
               </div>
             </div>
@@ -270,8 +272,8 @@ function ProgressInsights({ activity }) {
         ))}
       </div>
       {trend && recentTests.length > 0 && (
-        <div className="pt-3 mt-3 border-t border-gray-200">
-            <div className="text-sm text-gray-600">
+        <div className="pt-3 mt-3 border-t border-niat-border">
+            <div className="text-sm text-niat-text-secondary">
               Trend:{' '}
               <span
                 className={`font-semibold ${
@@ -279,7 +281,7 @@ function ProgressInsights({ activity }) {
                     ? 'text-green-600'
                     : trend === 'declining'
                     ? 'text-red-600'
-                    : 'text-gray-600'
+                    : 'text-niat-text-secondary'
                 }`}
               >
                 {trend.charAt(0).toUpperCase() + trend.slice(1)}

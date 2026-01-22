@@ -71,7 +71,7 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-gray-50 pt-16 md:pt-20">
       <div className="section-container py-6">
         {/* Top Status Bar */}
-        <div className="card bg-gradient-to-r from-primary to-secondary text-white mb-6">
+        <div className="card bg-gradient-to-r from-[#220000] to-[#974039] text-white mb-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
               <h1 className="text-2xl font-bold mb-1">
@@ -96,7 +96,7 @@ export default function DashboardPage() {
             label="Latest Score"
             value={stats.latestScore || 'N/A'}
             icon="📊"
-            color="primary"
+            color="#FFF1C6"
           />
           <SnapshotCard
             label="Best Percentile"
@@ -214,13 +214,19 @@ function SnapshotCard({ label, value, icon, color }) {
     'accent-1': 'from-accent-1/10 to-accent-1/5 border-accent-1/20',
   };
 
+  // Use solid background for secondary (Best Percentile) card
+  const isSecondary = color === 'secondary';
+  const backgroundColor = isSecondary ? '#FEE2E2' : null;
+  const borderColor = isSecondary ? 'rgba(153, 27, 27, 0.2)' : null;
+
   return (
     <div
-      className={`card bg-gradient-to-br ${colorClasses[color]} border-2 text-center`}
+      className={`card ${!isSecondary ? `bg-gradient-to-br ${colorClasses[color]}` : ''} border-2 text-center`}
+      style={isSecondary ? { backgroundColor, borderColor } : {}}
     >
       <div className="text-3xl mb-2">{icon}</div>
-      <div className="text-2xl font-bold text-gray-900 mb-1">{value}</div>
-      <div className="text-sm text-gray-600">{label}</div>
+      <div className="text-2xl font-bold text-niat-text mb-1">{value}</div>
+      <div className="text-sm text-niat-text-secondary">{label}</div>
     </div>
   );
 }

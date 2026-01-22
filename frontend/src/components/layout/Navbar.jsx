@@ -11,6 +11,7 @@ export default function Navbar() {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [activeRoom, setActiveRoom] = useState(null);
+  const [isRoomBannerDismissed, setIsRoomBannerDismissed] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
@@ -40,13 +41,20 @@ export default function Navbar() {
       try {
         const response = await roomApi.getMyActiveRoom();
         if (response.data.has_active_room && response.data.room) {
-          setActiveRoom(response.data.room);
+          const newRoom = response.data.room;
+          // Reset dismissed state if room code changed
+          if (activeRoom?.code !== newRoom.code) {
+            setIsRoomBannerDismissed(false);
+          }
+          setActiveRoom(newRoom);
         } else {
           setActiveRoom(null);
+          setIsRoomBannerDismissed(false);
         }
       } catch (err) {
         // Silently fail - user might not have an active room
         setActiveRoom(null);
+        setIsRoomBannerDismissed(false);
       }
     };
 
@@ -87,62 +95,90 @@ export default function Navbar() {
   };
 
   return (
-    <nav
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled
-          ? 'bg-white shadow-md border-b border-gray-200'
-          : 'bg-white/95 backdrop-blur-sm'
-      }`}
-    >
-      <div className="section-container px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-14 sm:h-16 md:h-20">
-          {/* Logo */}
-          <Link href="/" className="flex items-center space-x-2 group">
-            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center transform group-hover:scale-110 transition-transform">
-              <span className="text-white font-bold text-sm sm:text-lg">CP</span>
+    <>
+      {/* Active Room Banner */}
+      {activeRoom && !isRoomBannerDismissed && (
+        <div className="fixed top-0 left-0 right-0 z-[60] bg-niat-primary text-white py-2 px-4 sm:px-6 lg:px-8">
+          <div className="section-container flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm sm:text-base">
+              <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+              </svg>
+              <span>Active Room: <strong>{activeRoom.code}</strong></span>
             </div>
-            <span className="text-lg sm:text-xl font-bold text-gray-900 hidden sm:block">
-              College Predictor
-            </span>
-          </Link>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => router.push(`/guild/${activeRoom.code}/lobby`)}
+                className="text-sm sm:text-base font-medium hover:underline underline-offset-2 transition-all"
+              >
+                Go to Room →
+              </button>
+              <button
+                onClick={() => setIsRoomBannerDismissed(true)}
+                className="p-1 hover:bg-white/20 rounded-full transition-colors"
+                aria-label="Close banner"
+              >
+                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      <nav
+        className={`fixed ${activeRoom && !isRoomBannerDismissed ? 'top-10' : 'top-0'} left-0 right-0 z-50 transition-all duration-300 w-full bg-white shadow-sm`}
+      >
+        <div className="w-full pt-4 pb-6 bg-white">
+          <div className={`bg-niat-navbar rounded-2xl shadow-sm px-4 sm:px-6 lg:px-8 py-4 mx-4 sm:mx-6 lg:mx-8 ${activeRoom && !isRoomBannerDismissed ? '' : 'mt-0'}`}>
+            <div className="flex items-center justify-between">
+              {/* Logo */}
+              <Link href="/" className="flex items-center space-x-2 sm:space-x-3 group flex-shrink-0 max-w-[60%] sm:max-w-none">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 flex items-center justify-center flex-shrink-0">
+                  <img 
+                    src="/niat.png" 
+                    alt="NIAT Logo"
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+                <div className="text-xs sm:text-sm md:text-base lg:text-lg font-medium text-[#991B1B] hidden sm:block leading-tight">
+                  <div>Nxtwave of Innovation in</div>
+                  <div>Advanced Technologies</div>
+                </div>
+                <span className="text-sm text-niat-text sm:hidden">
+                  NIAT
+                </span>
+              </Link>
 
-          {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-1">
+              {/* Desktop Navigation */}
+              <div className="hidden md:flex items-center space-x-8">
             {navLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
-                className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                className={`relative font-medium text-sm transition-all duration-200 ${
                   pathname === link.href
-                    ? 'bg-primary text-white'
-                    : 'text-gray-700 hover:bg-gray-100'
+                    ? 'text-niat-text'
+                    : 'text-niat-text hover:text-niat-primary'
+                } ${
+                  pathname === link.href
+                    ? 'after:absolute after:bottom-0 after:left-0 after:w-full after:h-0.5 after:bg-niat-text'
+                    : 'after:absolute after:bottom-0 after:left-0 after:w-0 after:h-0.5 after:bg-niat-text after:transition-all after:duration-200 hover:after:w-full'
                 }`}
               >
                 {link.label}
               </Link>
             ))}
-            {/* Return to Room Button */}
-            {activeRoom && (
-              <button
-                onClick={() => router.push(`/guild/${activeRoom.code}/lobby`)}
-                className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 bg-green-600 text-white hover:bg-green-700 flex items-center gap-1.5"
-                title={`Return to Room ${activeRoom.code}`}
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
-                <span>Room {activeRoom.code}</span>
-              </button>
-            )}
-          </div>
+              </div>
 
-          {/* Login/Profile Button */}
-          <div className="hidden md:flex items-center space-x-4">
+              {/* Login/Profile Button */}
+              <div className="hidden md:flex items-center space-x-4">
             {user ? (
               <div className="relative">
                 <button
                   onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-                  className="flex items-center space-x-2 px-4 py-2 rounded-lg font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                  className="flex items-center space-x-2 px-4 py-2 rounded-lg font-medium text-niat-text hover:bg-niat-section transition-colors"
                 >
                   <span>{user.full_name || user.name || 'Profile'}</span>
                   <svg
@@ -160,39 +196,32 @@ export default function Navbar() {
                   </svg>
                 </button>
                 {isProfileMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-niat-border py-2 z-50">
                     <Link
                       href="/profile"
                       onClick={() => setIsProfileMenuOpen(false)}
-                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      className="block px-4 py-2 text-sm text-niat-text hover:bg-niat-section"
                     >
                       Profile
                     </Link>
                     <Link
                       href="/mistake-notebook"
                       onClick={() => setIsProfileMenuOpen(false)}
-                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      className="block px-4 py-2 text-sm text-niat-text hover:bg-niat-section"
                     >
                       Mistake Notebook
                     </Link>
                     <Link
                       href="/referral"
                       onClick={() => setIsProfileMenuOpen(false)}
-                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                      className="block px-4 py-2 text-sm text-niat-text hover:bg-niat-section flex items-center gap-2"
                     >
                       <span>🎁</span>
                       <span>Refer & Earn</span>
                     </Link>
-                    <Link
-                      href="/profile"
-                      onClick={() => setIsProfileMenuOpen(false)}
-                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 border-t border-gray-200 mt-1 pt-2"
-                    >
-                      Update Profile
-                    </Link>
                     <button
                       onClick={handleLogout}
-                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      className="w-full text-left px-4 py-2 text-sm text-niat-text hover:bg-niat-section"
                     >
                       Logout
                     </button>
@@ -206,80 +235,64 @@ export default function Navbar() {
             )}
           </div>
 
-          {/* Mobile Menu Button */}
-          <button
-            className="md:hidden p-2 text-gray-700 hover:text-primary transition-colors flex-shrink-0"
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            aria-label="Toggle menu"
-          >
-            {isMobileMenuOpen ? (
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+              {/* Mobile Menu Button */}
+              <button
+                className="md:hidden p-2 text-niat-text hover:text-niat-primary transition-colors flex-shrink-0"
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                aria-label="Toggle menu"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            ) : (
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 6h16M4 12h16M4 18h16"
-                />
-              </svg>
-            )}
-          </button>
-        </div>
+                {isMobileMenuOpen ? (
+                  <svg
+                    className="w-6 h-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                ) : (
+                  <svg
+                    className="w-6 h-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 6h16M4 12h16M4 18h16"
+                    />
+                  </svg>
+                )}
+              </button>
+            </div>
 
-        {/* Mobile Menu */}
-        {isMobileMenuOpen && (
-          <div className="md:hidden border-t border-gray-200 py-3 sm:py-4 max-h-[calc(100vh-4rem)] overflow-y-auto">
-            <div className="space-y-1">
+            {/* Mobile Menu */}
+            {isMobileMenuOpen && (
+              <div className="md:hidden mt-4 py-3 sm:py-4 max-h-[calc(100vh-8rem)] overflow-y-auto">
+            <div className="space-y-1 px-4">
             {navLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
                 onClick={() => setIsMobileMenuOpen(false)}
-                  className={`block px-4 py-2.5 sm:py-3 rounded-lg text-sm sm:text-base font-medium transition-all ${
+                className={`block px-4 py-2.5 sm:py-3 text-sm sm:text-base font-medium transition-all relative rounded-lg ${
                   pathname === link.href
-                    ? 'bg-primary text-white'
-                    : 'text-gray-700 hover:bg-gray-100'
+                    ? 'text-niat-text bg-niat-section/50'
+                    : 'text-niat-text hover:text-niat-primary hover:bg-niat-section/30'
                 }`}
               >
                 {link.label}
               </Link>
             ))}
             </div>
-            {/* Return to Room Button (Mobile) */}
-            {activeRoom && (
-              <button
-                onClick={() => {
-                  router.push(`/guild/${activeRoom.code}/lobby`);
-                  setIsMobileMenuOpen(false);
-                }}
-                className="w-full mx-4 mt-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all bg-green-600 text-white hover:bg-green-700 flex items-center justify-center gap-2"
-                title={`Return to Room ${activeRoom.code}`}
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
-                <span>Room {activeRoom.code}</span>
-              </button>
-            )}
-            <div className="px-4 pt-2 pb-3 space-y-2 border-t border-gray-200 mt-2">
+            <div className="px-4 pt-2 pb-3 space-y-2 border-t border-niat-border mt-2">
               {user ? (
                 <>
                   <Link
@@ -303,13 +316,6 @@ export default function Navbar() {
                   >
                     Mistake Notebook
                   </Link>
-                  <Link
-                    href="/profile"
-                    className="btn-secondary w-full text-sm py-2.5 text-center block"
-                    onClick={() => setIsMobileMenuOpen(false)}
-                  >
-                    Update Profile
-                  </Link>
                   <button
                     onClick={handleLogout}
                     className="btn-secondary w-full text-sm py-2.5"
@@ -326,11 +332,13 @@ export default function Navbar() {
                   Login
                 </Link>
               )}
+              </div>
             </div>
+            )}
           </div>
-        )}
-      </div>
-    </nav>
+        </div>
+      </nav>
+    </>
   );
 }
 

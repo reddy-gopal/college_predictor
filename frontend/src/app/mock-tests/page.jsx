@@ -300,8 +300,8 @@ export default function MockTestsPage() {
   // Show loading while checking authentication
   if (authLoading) {
     return (
-      <div className="pt-16 md:pt-20 min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      <div className="pt-16 md:pt-20 min-h-screen bg-niat-section flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-niat-primary"></div>
       </div>
     );
   }
@@ -309,10 +309,10 @@ export default function MockTestsPage() {
   // If not logged in, show message (redirect will happen via useEffect)
   if (!user) {
     return (
-      <div className="pt-16 md:pt-20 min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="pt-16 md:pt-20 min-h-screen bg-niat-section flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-gray-600">Redirecting to login...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-niat-primary mx-auto mb-4"></div>
+          <p className="text-niat-text-secondary">Redirecting to login...</p>
         </div>
       </div>
     );
@@ -329,7 +329,7 @@ export default function MockTestsPage() {
           scrollbar-width: none;
         }
       `}</style>
-      <div className="pt-16 md:pt-20 min-h-screen bg-gray-50">
+      <div className="pt-16 md:pt-20 min-h-screen bg-niat-section">
         <div className="section-container py-12">
         {/* Header */}
         <div className="text-center mb-12">
@@ -357,11 +357,11 @@ export default function MockTestsPage() {
         {/* Step 1: Select Exam */}
         {step === 1 && (
           <div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Select Exam</h2>
+            <h2 className="text-2xl font-bold text-niat-text mb-6">Select Exam</h2>
             {loading ? (
               <div className="text-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-                <p className="text-gray-600">Loading exams...</p>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-niat-primary mx-auto mb-4"></div>
+                <p className="text-niat-text-secondary">Loading exams...</p>
               </div>
             ) : exams.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -389,15 +389,15 @@ export default function MockTestsPage() {
                       ) : null}
                       <div className={`text-5xl exam-fallback-icon ${exam.logo ? 'hidden' : 'block'}`}>📋</div>
                     </div>
-                    <h3 className="text-xl font-bold text-gray-900">{exam.name}</h3>
+                    <h3 className="text-xl font-bold text-niat-text">{exam.name}</h3>
                   </button>
                 ))}
               </div>
             ) : (
               <div className="text-center py-12">
                 <div className="text-6xl mb-4">📝</div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-2">No Exams Available</h3>
-                <p className="text-gray-600">Check back soon!</p>
+                <h3 className="text-2xl font-bold text-niat-text mb-2">No Exams Available</h3>
+                <p className="text-niat-text-secondary">Check back soon!</p>
               </div>
             )}
           </div>
@@ -413,16 +413,16 @@ export default function MockTestsPage() {
               >
                 ← Back to Exams
               </button>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">{selectedExam.name}</h2>
+              <h2 className="text-2xl font-bold text-niat-text mb-2">{selectedExam.name}</h2>
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Select Year(s)</h3>
-              <p className="text-gray-600 mb-4">You can select multiple years</p>
+              <h3 className="text-lg font-semibold text-niat-text mb-4">Select Year(s)</h3>
+              <p className="text-niat-text-secondary mb-4">You can select multiple years</p>
               {loadingYears ? (
                 <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto mb-2"></div>
-                  <p className="text-gray-600">Loading years...</p>
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-niat-primary mx-auto mb-2"></div>
+                  <p className="text-niat-text-secondary">Loading years...</p>
                 </div>
               ) : availableYears.length > 0 ? (
                 <>
@@ -437,7 +437,7 @@ export default function MockTestsPage() {
                             className={`flex-shrink-0 snap-center px-8 py-6 rounded-xl border-2 transition-all duration-300 font-semibold text-lg min-w-[140px] shadow-lg hover:scale-105 ${
                               selectedYears.includes(year)
                                 ? 'bg-gradient-to-br from-indigo-600 to-indigo-700 text-white border-indigo-600 shadow-indigo-200 scale-105'
-                                : 'bg-white text-gray-700 border-gray-300 hover:border-indigo-400 hover:shadow-indigo-100'
+                                : 'bg-white text-niat-text border-niat-border hover:border-niat-primary hover:shadow-indigo-100'
                             }`}
                           >
                             <div className="text-center">
@@ -489,14 +489,14 @@ export default function MockTestsPage() {
                 ← Back to Years
               </button>
               <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mb-6">
-                <p className="text-gray-700">
+                <p className="text-niat-text">
                   <span className="font-semibold">Exam:</span> {selectedExam.name} |{' '}
                   <span className="font-semibold">Years:</span> {selectedYears.join(', ')}
                 </p>
               </div>
             </div>
 
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Select Test Type</h2>
+            <h2 className="text-2xl font-bold text-niat-text mb-6">Select Test Type</h2>
             {/* Test Type Carousel */}
             <div className="relative">
               <div className="overflow-hidden">
@@ -508,14 +508,14 @@ export default function MockTestsPage() {
                       className={`flex-shrink-0 snap-center w-72 p-6 rounded-xl border-2 text-left transition-all duration-300 shadow-lg hover:scale-105 ${
                         selectedTestType === type.value
                           ? 'border-indigo-600 bg-gradient-to-br from-indigo-50 to-indigo-100 shadow-indigo-200 scale-105'
-                          : 'border-gray-200 bg-white hover:border-indigo-300 hover:shadow-indigo-100'
+                          : 'border-niat-border bg-white hover:border-niat-primary hover:shadow-indigo-100'
                       }`}
                     >
                       <div className="flex items-start gap-4">
                         <span className="text-4xl">{type.icon}</span>
                         <div className="flex-1">
-                          <h3 className="font-bold text-gray-900 mb-2 text-lg">{type.label}</h3>
-                          <p className="text-sm text-gray-600 leading-relaxed">{type.description}</p>
+                          <h3 className="font-bold text-niat-text mb-2 text-lg">{type.label}</h3>
+                          <p className="text-sm text-niat-text-secondary leading-relaxed">{type.description}</p>
                         </div>
                         {selectedTestType === type.value && (
                           <span className="text-indigo-600 text-2xl">✓</span>
@@ -540,7 +540,7 @@ export default function MockTestsPage() {
                 ← Change Test Type
               </button>
               <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mb-6">
-                <p className="text-gray-700">
+                <p className="text-niat-text">
                   <span className="font-semibold">Exam:</span> {selectedExam.name} |{' '}
                   <span className="font-semibold">Years:</span> {selectedYears.join(', ')} |{' '}
                   <span className="font-semibold">Type:</span>{' '}
@@ -555,11 +555,11 @@ export default function MockTestsPage() {
                 {loading ? (
                   <div className="text-center py-12">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-                    <p className="text-gray-600">Loading tests...</p>
+                    <p className="text-niat-text-secondary">Loading tests...</p>
                   </div>
                 ) : tests.length > 0 ? (
                   <div>
-                    <h2 className="text-2xl font-bold text-gray-900 mb-6">Available Full Length Tests</h2>
+                    <h2 className="text-2xl font-bold text-niat-text mb-6">Available Full Length Tests</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                       {tests.map((test) => (
                         <MockTestCard key={test.id} test={test} />
@@ -569,8 +569,8 @@ export default function MockTestsPage() {
                 ) : (
                   <div className="text-center py-12 bg-white rounded-lg shadow-lg p-8">
                     <div className="text-6xl mb-4">🎯</div>
-                    <h3 className="text-2xl font-bold text-gray-900 mb-2">No Full Length Tests Available</h3>
-                    <p className="text-gray-600">
+                    <h3 className="text-2xl font-bold text-niat-text mb-2">No Full Length Tests Available</h3>
+                    <p className="text-niat-text-secondary">
                       No predefined full length tests found for this exam.
                     </p>
                   </div>
@@ -581,11 +581,11 @@ export default function MockTestsPage() {
             {/* Practice/Sectional/Custom: Show Customization */}
             {selectedTestType !== 'full_length' && (
               <div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-6">Customize Your Test</h2>
+                <h2 className="text-2xl font-bold text-niat-text mb-6">Customize Your Test</h2>
 
                 {/* Subjects (Required for Sectional/Custom) */}
                 <div className="mb-6 bg-white rounded-lg shadow-lg p-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                  <label className="block text-sm font-medium text-niat-text mb-3">
                     Subjects{' '}
                     {(selectedTestType === 'sectional' || selectedTestType === 'custom') && (
                       <span className="text-red-500">*</span>
@@ -600,7 +600,7 @@ export default function MockTestsPage() {
                         className={`px-4 py-2 rounded-lg border-2 transition-all ${
                           selectedSubjects.includes(subject)
                             ? 'bg-indigo-600 text-white border-indigo-600'
-                            : 'bg-white text-gray-700 border-gray-300 hover:border-indigo-400'
+                            : 'bg-white text-niat-text border-niat-border hover:border-niat-primary'
                         }`}
                       >
                         {subject}
@@ -615,7 +615,7 @@ export default function MockTestsPage() {
 
                 {/* Difficulty */}
                 <div className="mb-6 bg-white rounded-lg shadow-lg p-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                  <label className="block text-sm font-medium text-niat-text mb-3">
                     Difficulty (Optional - Leave empty for all)
                   </label>
                   <div className="flex flex-wrap gap-3">
@@ -627,7 +627,7 @@ export default function MockTestsPage() {
                         className={`px-4 py-2 rounded-lg border-2 transition-all ${
                           selectedDifficulty.includes(diff.value)
                             ? 'bg-indigo-600 text-white border-indigo-600'
-                            : 'bg-white text-gray-700 border-gray-300 hover:border-indigo-400'
+                            : 'bg-white text-niat-text border-niat-border hover:border-niat-primary'
                         }`}
                       >
                         {diff.label}
@@ -638,15 +638,15 @@ export default function MockTestsPage() {
 
                 {/* Question Count */}
                 <div className="mb-6 bg-white rounded-lg shadow-lg p-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                  <label className="block text-sm font-medium text-niat-text mb-3">
                     Number of Questions: {questionCount}
                     {availableQuestionCount > 0 && (
-                      <span className="text-gray-500 text-sm ml-2">
+                      <span className="text-niat-text-secondary text-sm ml-2">
                         (Available: {availableQuestionCount})
                       </span>
                     )}
                     {loadingQuestionCount && (
-                      <span className="text-gray-500 text-sm ml-2">Loading...</span>
+                      <span className="text-niat-text-secondary text-sm ml-2">Loading...</span>
                     )}
                   </label>
                   {availableQuestionCount > 0 ? (
@@ -660,7 +660,7 @@ export default function MockTestsPage() {
                         className="w-full"
                         disabled={loadingQuestionCount}
                       />
-                      <div className="flex justify-between text-xs text-gray-500 mt-1">
+                      <div className="flex justify-between text-xs text-niat-text-secondary mt-1">
                         <span>1</span>
                         <span>{Math.min(availableQuestionCount, 100)}</span>
                       </div>
@@ -681,7 +681,7 @@ export default function MockTestsPage() {
 
                 {/* Time Per Question */}
                 <div className="mb-6 bg-white rounded-lg shadow-lg p-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                  <label className="block text-sm font-medium text-niat-text mb-3">
                     Time Per Question (minutes): {timePerQuestion}
                     <span className="text-gray-500 text-sm ml-2">(Max: 4 minutes)</span>
                   </label>
@@ -697,7 +697,7 @@ export default function MockTestsPage() {
                         setTimePerQuestion(val);
                       }
                     }}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full px-4 py-2 border border-niat-border rounded-lg focus:ring-2 focus:ring-niat-primary focus:border-niat-primary"
                   />
                   {timePerQuestion > 4 && (
                     <p className="text-red-500 text-sm mt-2">Maximum time per question is 4 minutes</p>
@@ -761,25 +761,25 @@ function MockTestCard({ test }) {
   return (
     <div className="card hover:shadow-xl transition-all duration-300">
       <div className="flex items-start justify-between mb-4">
-        <h3 className="text-xl font-bold text-gray-900 flex-1">{test.title}</h3>
+        <h3 className="text-xl font-bold text-niat-text flex-1">{test.title}</h3>
         {test.is_vip && (
           <span className="bg-accent-1 text-white text-xs font-bold px-2 py-1 rounded">VIP</span>
         )}
       </div>
 
       <div className="space-y-3 mb-6">
-        <div className="flex items-center text-gray-600">
+        <div className="flex items-center text-niat-text-secondary">
           <span className="mr-2">📊</span>
           <span>{test.total_questions || test.questions_count || 0} Questions</span>
         </div>
-        <div className="flex items-center text-gray-600">
+        <div className="flex items-center text-niat-text-secondary">
           <span className="mr-2">⏱️</span>
           <span>
             {durationHours > 0 && `${durationHours}h `}
             {durationMins}m
           </span>
         </div>
-        <div className="flex items-center text-gray-600">
+        <div className="flex items-center text-niat-text-secondary">
           <span className="mr-2">📝</span>
           <span>{test.total_marks} Marks</span>
         </div>

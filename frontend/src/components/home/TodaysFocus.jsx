@@ -46,7 +46,7 @@ export default function TodaysFocus({ user, stats, activity }) {
 
   if (loading) {
     return (
-      <div className="card mb-6">
+      <div className="rounded-xl shadow-md border border-niat-border p-6 mb-6 bg-[#FFF8EB]">
         <h2 className="text-xl font-bold text-gray-900 mb-4">
           Your Focus for Today
         </h2>
@@ -60,7 +60,7 @@ export default function TodaysFocus({ user, stats, activity }) {
 
   if (tasks.length === 0) {
     return (
-      <div className="card mb-6">
+      <div className="rounded-xl shadow-md border border-niat-border p-6 mb-6 bg-[#FFF8EB]">
         <h2 className="text-xl font-bold text-gray-900 mb-4">
           Your Focus for Today
         </h2>
@@ -73,7 +73,7 @@ export default function TodaysFocus({ user, stats, activity }) {
   }
 
   return (
-    <div className="card mb-6">
+    <div className="rounded-xl shadow-md border border-niat-border p-6 mb-6 bg-[#FFF8EB]">
       <h2 className="text-xl font-bold text-gray-900 mb-4">
         Your Focus for Today
       </h2>
@@ -96,9 +96,9 @@ function FocusTask({ task, onTaskComplete }) {
   const [completing, setCompleting] = useState(false);
   
   const priorityColors = {
-    high: 'border-accent-3/30 bg-accent-3/5',
-    medium: 'border-accent-1/30 bg-accent-1/5',
-    low: 'border-gray-200 bg-gray-50',
+    high: 'border-accent-3/30 bg-niat-section',
+    medium: 'border-accent-1/30 bg-[#FFF8EB]',
+    low: 'border-gray-200 bg-white',
   };
 
   const handleTaskClick = async (e) => {

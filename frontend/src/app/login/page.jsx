@@ -223,7 +223,7 @@ export default function LoginPage() {
 
   if (otpSent) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-primary/5 via-white to-secondary/5 flex items-center justify-center px-6">
+      <div className="min-h-screen bg-gradient-to-br from-primary/5 via-white to-secondary/5 flex items-center justify-center px-6 pt-24 pb-6">
         <div className="w-full max-w-md">
           <div className="card">
             <div className="text-center mb-6">
@@ -287,12 +287,16 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-white to-secondary/5 flex items-center justify-center px-6">
+    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-white to-secondary/5 flex items-center justify-center px-6 pt-24 pb-6">
       <div className="w-full max-w-md">
         <div className="card">
           <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-gradient-to-br from-primary to-secondary rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <span className="text-white font-bold text-2xl">CP</span>
+            <div className="w-20 h-20 flex items-center justify-center mx-auto mb-4">
+              <img 
+                src="/niat.png" 
+                alt="NIAT Logo"
+                className="w-full h-full object-contain"
+              />
             </div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">
               Welcome Back!

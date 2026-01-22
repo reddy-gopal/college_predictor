@@ -6,23 +6,30 @@ import ToastContainer from '@/components/common/Toast';
 import Script from 'next/script';
 
 export const metadata = {
-  title: 'College Predictor - Practice Smart. Predict Your Rank. Choose the Right College.',
-  description: 'Comprehensive platform for competitive exam preparation with mock tests, college prediction, and rank estimation.',
+  title: 'NIAT',
+  description: 'Nxtwave of Innovation in Advanced Technologies',
+  icons: {
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+    ],
+    apple: '/favicon.svg',
+  },
 };
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <head>
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <Script
           src="https://accounts.google.com/gsi/client"
           strategy="afterInteractive"
         />
       </head>
-      <body className="min-h-screen bg-white text-gray-900 antialiased flex flex-col">
+      <body className="min-h-screen bg-white text-niat-text antialiased flex flex-col">
         <AuthProvider>
           <Navbar />
-          <main className="flex-1">{children}</main>
+          <main className="flex-1 pt-10 md:pt-13">{children}</main>
           <Footer />
           <ToastContainer />
         </AuthProvider>

@@ -108,6 +108,8 @@ export const mockTestApi = {
   getProfileBadges: () => api.get('/mocktest/profile/badges/'),
   getActivityHeatmap: (params) => api.get('/mocktest/profile/activity-heatmap/', { params }),
   getProfileAnalytics: () => api.get('/mocktest/profile/analytics/'),
+  getPerformanceSummary: () => api.get('/mocktest/performance-summary/'),
+  getQuestionsPerformanceOverview: () => api.get('/mocktest/questions-performance-overview/'),
 };
 
 // Room (Guild) APIs

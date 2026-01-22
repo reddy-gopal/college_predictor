@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { rankPredictorApi } from '@/lib/api';
+import HowItWorks from '@/components/predictor/HowItWorks';
+import FAQ from '@/components/predictor/FAQ';
 
 export default function PredictRankPage() {
   const [formData, setFormData] = useState({
@@ -337,6 +339,138 @@ export default function PredictRankPage() {
           )}
         </div>
       </div>
+
+      {/* How It Works & FAQ - Full Width Below Results */}
+      {result && (
+        <div className="w-full bg-gray-50 py-12">
+          <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto w-full px-4 sm:px-6 lg:px-8">
+            {/* How It Works */}
+            <div className="mb-8">
+              <HowItWorks
+                title="How Rank Prediction Works"
+                steps={[
+                  {
+                    icon: '📊',
+                    title: 'Enter Score or Percentile',
+                    description: 'Input your exam score or percentile. You can choose either input type based on what information you have from your exam results.',
+                  },
+                  {
+                    icon: '🎯',
+                    title: 'Select Exam & Category',
+                    description: 'Choose your exam type, category (General, OBC, SC, ST), and the exam year. The system uses historical data from that year for prediction.',
+                  },
+                  {
+                    icon: '🧮',
+                    title: 'IDW Algorithm Processing',
+                    description: 'Our advanced Inverse Distance Weighting (IDW) algorithm finds the nearest matching rank bands from historical data. It selects the closest 5 bands and calculates a weighted average rank based on distance from your score/percentile.',
+                  },
+                  {
+                    icon: '📈',
+                    title: 'Get Rank Estimate',
+                    description: 'Receive an estimated rank range with confidence level. The prediction uses weighted interpolation from multiple data points, providing a more accurate estimate than simple linear interpolation.',
+                  },
+                ]}
+              />
+            </div>
+
+            {/* FAQ */}
+            <FAQ
+              items={[
+                {
+                  question: 'How accurate is the estimated rank?',
+                  answer: 'Our rank estimation uses the Inverse Distance Weighting (IDW) algorithm with historical data from previous years. The accuracy typically falls within ±5% of the actual rank, but actual ranks may vary depending on exam difficulty, number of candidates, and other factors. The confidence level (High/Medium/Low) indicates the reliability based on the rank range.',
+                },
+                {
+                  question: 'What is the difference between Score and Percentile?',
+                  answer: 'Score is the raw marks you obtained in the exam, while Percentile indicates the percentage of students who scored equal to or less than you. Different exams primarily use one or the other for ranking. Our system supports both input types and converts them appropriately.',
+                },
+                {
+                  question: 'How does the IDW algorithm work?',
+                  answer: 'Inverse Distance Weighting (IDW) finds the nearest 5 rank bands from historical data that match your score/percentile. It then calculates a weighted average rank, giving more weight to bands closer to your input value. This provides more accurate predictions than simple linear interpolation, especially when data points are sparse.',
+                },
+                {
+                  question: 'Can I predict rank for any exam?',
+                  answer: 'Currently, we support rank prediction for major competitive exams like JEE Mains, NEET, KCET, and others. Select your exam from the dropdown to see if it\'s supported. We continuously add more exams as data becomes available.',
+                },
+                {
+                  question: 'What if data for my year is not available?',
+                  answer: 'If data for your selected year is not available, the system automatically uses the most recent available year\'s data and displays a notification. This ensures you still get a useful estimate based on the closest available historical data.',
+                },
+                {
+                  question: 'Is my data saved when I use the predictor?',
+                  answer: 'No, we do not store any of your personal input data. The score/percentile you enter is processed in real-time to generate the prediction and is discarded immediately after. Your privacy is important to us.',
+                },
+              ]}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* How It Works & FAQ - Full Width Below Form if No Results */}
+      {!result && (
+        <div className="w-full bg-gray-50 py-12">
+          <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto w-full px-4 sm:px-6 lg:px-8">
+            {/* How It Works */}
+            <div className="mb-8">
+              <HowItWorks
+                title="How Rank Prediction Works"
+                steps={[
+                  {
+                    icon: '📊',
+                    title: 'Enter Score or Percentile',
+                    description: 'Input your exam score or percentile. You can choose either input type based on what information you have from your exam results.',
+                  },
+                  {
+                    icon: '🎯',
+                    title: 'Select Exam & Category',
+                    description: 'Choose your exam type, category (General, OBC, SC, ST), and the exam year. The system uses historical data from that year for prediction.',
+                  },
+                  {
+                    icon: '🧮',
+                    title: 'IDW Algorithm Processing',
+                    description: 'Our advanced Inverse Distance Weighting (IDW) algorithm finds the nearest matching rank bands from historical data. It selects the closest 5 bands and calculates a weighted average rank based on distance from your score/percentile.',
+                  },
+                  {
+                    icon: '📈',
+                    title: 'Get Rank Estimate',
+                    description: 'Receive an estimated rank range with confidence level. The prediction uses weighted interpolation from multiple data points, providing a more accurate estimate than simple linear interpolation.',
+                  },
+                ]}
+              />
+            </div>
+
+            {/* FAQ */}
+            <FAQ
+              items={[
+                {
+                  question: 'How accurate is the estimated rank?',
+                  answer: 'Our rank estimation uses the Inverse Distance Weighting (IDW) algorithm with historical data from previous years. The accuracy typically falls within ±5% of the actual rank, but actual ranks may vary depending on exam difficulty, number of candidates, and other factors. The confidence level (High/Medium/Low) indicates the reliability based on the rank range.',
+                },
+                {
+                  question: 'What is the difference between Score and Percentile?',
+                  answer: 'Score is the raw marks you obtained in the exam, while Percentile indicates the percentage of students who scored equal to or less than you. Different exams primarily use one or the other for ranking. Our system supports both input types and converts them appropriately.',
+                },
+                {
+                  question: 'How does the IDW algorithm work?',
+                  answer: 'Inverse Distance Weighting (IDW) finds the nearest 5 rank bands from historical data that match your score/percentile. It then calculates a weighted average rank, giving more weight to bands closer to your input value. This provides more accurate predictions than simple linear interpolation, especially when data points are sparse.',
+                },
+                {
+                  question: 'Can I predict rank for any exam?',
+                  answer: 'Currently, we support rank prediction for major competitive exams like JEE Mains, NEET, KCET, and others. Select your exam from the dropdown to see if it\'s supported. We continuously add more exams as data becomes available.',
+                },
+                {
+                  question: 'What if data for my year is not available?',
+                  answer: 'If data for your selected year is not available, the system automatically uses the most recent available year\'s data and displays a notification. This ensures you still get a useful estimate based on the closest available historical data.',
+                },
+                {
+                  question: 'Is my data saved when I use the predictor?',
+                  answer: 'No, we do not store any of your personal input data. The score/percentile you enter is processed in real-time to generate the prediction and is discarded immediately after. Your privacy is important to us.',
+                },
+              ]}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

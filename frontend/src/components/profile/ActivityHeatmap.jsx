@@ -429,12 +429,12 @@ export default function ActivityHeatmap() {
 
   const getIntensity = (count) => {
     // Green if any test submitted, empty otherwise
-      if (count === 0) return 'bg-gray-100 dark:bg-gray-800';
+      if (count === 0) return 'bg-white/60';
       // All submitted days get green, intensity based on count
-      if (count === 1) return 'bg-green-400 dark:bg-green-700';
-      if (count === 2 || count === 3) return 'bg-green-500 dark:bg-green-600';
-      if (count >= 4) return 'bg-green-600 dark:bg-green-500';
-      return 'bg-green-400 dark:bg-green-700';
+      if (count === 1) return 'bg-green-400';
+      if (count === 2 || count === 3) return 'bg-green-500';
+      if (count >= 4) return 'bg-green-600';
+      return 'bg-green-400';
   };
 
   const formatTooltip = (dayData) => {
@@ -459,11 +459,11 @@ export default function ActivityHeatmap() {
 
   if (loading) {
     return (
-      <div className="card bg-white dark:bg-gray-800 mb-6">
+      <div className="card bg-[#FFF8EB] mb-6">
         <div className="p-6">
           <div className="animate-pulse">
-            <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-48 mb-4"></div>
-            <div className="h-32 bg-gray-200 dark:bg-gray-700 rounded"></div>
+            <div className="h-6 bg-white/60 rounded w-48 mb-4"></div>
+            <div className="h-32 bg-white/60 rounded"></div>
           </div>
         </div>
       </div>
@@ -472,9 +472,9 @@ export default function ActivityHeatmap() {
 
   if (error && !data) {
     return (
-      <div className="card bg-white dark:bg-gray-800 mb-6">
+      <div className="card bg-[#FFF8EB] mb-6">
         <div className="p-6 text-center">
-          <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
+          <p className="text-red-600 mb-4">{error}</p>
           <button onClick={fetchHeatmap} className="btn-primary">
             Try Again
           </button>
@@ -490,14 +490,14 @@ export default function ActivityHeatmap() {
   const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   return (
-    <div className="card bg-white dark:bg-gray-800 mb-4 md:mb-6">
+    <div className="card bg-[#FFF8EB] mb-4 md:mb-6">
       <div className="p-4 md:p-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 md:mb-6 gap-3 sm:gap-4">
           <div className="w-full sm:w-auto">
-            <h2 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white mb-2">
+            <h2 className="text-xl md:text-2xl font-bold text-niat-text mb-2">
               Activity Heatmap
             </h2>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 md:gap-4 text-xs md:text-sm text-gray-600 dark:text-gray-400">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 md:gap-4 text-xs md:text-sm text-niat-text-secondary">
               {selectedYear === 'Current' ? (
                 <>
                   <span>
@@ -529,7 +529,7 @@ export default function ActivityHeatmap() {
             <select
               value={selectedYear}
               onChange={(e) => setSelectedYear(e.target.value)}
-              className="w-full sm:w-auto px-3 py-1.5 rounded text-sm font-medium bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-300 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
+              className="w-full sm:w-auto px-3 py-1.5 rounded text-sm font-medium bg-white text-niat-text border border-niat-border/50 focus:outline-none focus:ring-2 focus:ring-niat-primary focus:border-niat-primary transition-colors shadow-sm"
             >
               <option value="Current">Current</option>
               {availableYears.map((year) => (
@@ -554,7 +554,7 @@ export default function ActivityHeatmap() {
             minWidth: `${(gridData.totalWeeks * 16) + 48}px` // 12px cell + 4px gap = 16px per week, + 48px for day labels
           }}>
             {/* Month labels - positioned above their corresponding weeks */}
-            <div className={`flex text-xs text-gray-600 dark:text-gray-400 mb-2 relative min-w-max`} style={{ height: '20px' }}>
+            <div className={`flex text-xs text-niat-text-secondary mb-2 relative min-w-max`} style={{ height: '20px' }}>
             <div className="w-12 flex-shrink-0"></div>
               <div className={`relative min-w-max`} style={{ position: 'relative', minWidth: `${gridData.totalWeeks * 16}px` }}>
                 {gridData.monthLabels.map((monthLabel, idx) => {
@@ -599,7 +599,7 @@ export default function ActivityHeatmap() {
           {/* Heatmap grid */}
             <div className={`flex min-w-max`}>
             {/* Day labels (left side) - ALL days visible */}
-            <div className="w-12 flex-shrink-0 flex flex-col gap-1 text-xs text-gray-600 dark:text-gray-400">
+            <div className="w-12 flex-shrink-0 flex flex-col gap-1 text-xs text-niat-text-secondary">
               {dayLabels.map((label, idx) => (
                 <div key={idx} className="h-3 flex items-center justify-end pr-2">
                   {label}
@@ -636,16 +636,16 @@ export default function ActivityHeatmap() {
                         key={`${weekIndex}-${dayOfWeek}`}
                           className={`w-3 h-3 rounded ${getIntensity(testCount)} ${
                           cell.isToday 
-                            ? 'border-2 border-blue-600 dark:border-blue-400 shadow-sm' 
-                            : 'border border-gray-200 dark:border-gray-700'
-                        } cursor-pointer hover:ring-2 hover:ring-gray-400 dark:hover:ring-gray-500 transition-all relative group`}
+                            ? 'border-2 border-niat-primary shadow-sm' 
+                            : 'border border-niat-border/50'
+                        } cursor-pointer hover:ring-2 hover:ring-niat-primary/50 transition-all relative group`}
                         title={tooltipText}
                       >
                         {/* Enhanced tooltip on hover */}
-                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 dark:bg-gray-800 text-white text-xs rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-niat-text text-white text-xs rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
                           {tooltipText}
                           <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
-                            <div className="border-4 border-transparent border-t-gray-900 dark:border-t-gray-800"></div>
+                            <div className="border-4 border-transparent border-t-niat-text"></div>
                           </div>
                         </div>
                       </div>
@@ -659,14 +659,14 @@ export default function ActivityHeatmap() {
         </div>
 
         {/* Legend */}
-        <div className="flex items-center justify-end gap-2 mt-4 text-xs text-gray-600 dark:text-gray-400">
+        <div className="flex items-center justify-end gap-2 mt-4 text-xs text-niat-text-secondary">
           <span className="hidden sm:inline">Less</span>
           <div className="flex gap-1">
-            <div className="w-3 h-3 rounded bg-gray-100 dark:bg-gray-800"></div>
-            <div className="w-3 h-3 rounded bg-green-200 dark:bg-green-900"></div>
-            <div className="w-3 h-3 rounded bg-green-400 dark:bg-green-700"></div>
-            <div className="w-3 h-3 rounded bg-green-600 dark:bg-green-600"></div>
-            <div className="w-3 h-3 rounded bg-green-800 dark:bg-green-500"></div>
+            <div className="w-3 h-3 rounded bg-white/60"></div>
+            <div className="w-3 h-3 rounded bg-green-200"></div>
+            <div className="w-3 h-3 rounded bg-green-400"></div>
+            <div className="w-3 h-3 rounded bg-green-600"></div>
+            <div className="w-3 h-3 rounded bg-green-800"></div>
           </div>
           <span className="hidden sm:inline">More</span>
         </div>

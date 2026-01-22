@@ -54,22 +54,22 @@ export default function ProgressSnapshot({ stats, activity, user }) {
       />
       
       {/* Row 2: Exam Target & Target Rank & XP */}
-      <div className="card bg-gradient-to-br from-accent-1/10 to-accent-1/5 border-2 border-accent-1/20 text-center">
+      <div className="card border-2 text-center" style={{ backgroundColor: '#FEE2E2', borderColor: 'rgba(153, 27, 27, 0.2)' }}>
         <div className="text-3xl mb-2">🎯</div>
-        <div className="text-base font-bold text-gray-900 mb-1">
+        <div className="text-base font-bold text-niat-text mb-1">
           {examTarget || '—'}
         </div>
-        <div className="text-xs text-gray-600 mb-2">Exam Target</div>
+        <div className="text-xs text-niat-text-secondary mb-2">Exam Target</div>
         {targetRank ? (
-          <div className="text-lg font-bold bg-gradient-to-r from-accent-1 to-accent-2 bg-clip-text text-transparent">
+          <div className="text-lg font-bold text-niat-primary">
             Rank {targetRank.toLocaleString()}
           </div>
         ) : (
-          <div className="text-lg font-bold text-gray-500">—</div>
+          <div className="text-lg font-bold text-niat-text-secondary">—</div>
         )}
-        <div className="text-xs text-gray-600 mt-1">Target Rank</div>
+        <div className="text-xs text-niat-text-secondary mt-1">Target Rank</div>
       </div>
-      <div className="card bg-gradient-to-br from-accent-2/10 to-accent-3/10 border-2 border-accent-2/20">
+      <div className="card bg-[#FFF1C6] border-2 border-accent-2/20">
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm font-semibold text-gray-700">XP</span>
           <span className="text-xs text-gray-600">
@@ -92,18 +92,21 @@ export default function ProgressSnapshot({ stats, activity, user }) {
 
 function SnapshotCard({ label, value, icon, color }) {
   const colorClasses = {
-    primary: 'from-primary/10 to-primary/5 border-primary/20',
-    secondary: 'from-secondary/10 to-secondary/5 border-secondary/20',
-    'accent-1': 'from-accent-1/10 to-accent-1/5 border-accent-1/20',
+    primary: '#FFF1C6',
+    secondary: '#FEE2E2',
+    'accent-1': '#FFF1C6',
   };
+
+  const backgroundColor = colorClasses[color] || colorClasses.primary;
 
   return (
     <div
-      className={`card bg-gradient-to-br ${colorClasses[color]} border-2 text-center`}
+      className="card border-2 text-center"
+      style={{ backgroundColor, borderColor: 'rgba(153, 27, 27, 0.2)' }}
     >
       <div className="text-3xl mb-2">{icon}</div>
-      <div className="text-2xl font-bold text-gray-900 mb-1">{value}</div>
-      <div className="text-sm text-gray-600">{label}</div>
+      <div className="text-2xl font-bold text-niat-text mb-1">{value}</div>
+      <div className="text-sm text-niat-text-secondary">{label}</div>
     </div>
   );
 }

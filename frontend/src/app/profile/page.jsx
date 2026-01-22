@@ -26,8 +26,8 @@ export default function ProfilePage() {
 
   if (authLoading || loading) {
     return (
-      <div className="pt-16 md:pt-20 min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      <div className="pt-16 md:pt-20 min-h-screen bg-white flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-niat-primary"></div>
       </div>
     );
   }
@@ -37,7 +37,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="pt-16 md:pt-20 min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="pt-16 md:pt-20 min-h-screen bg-white">
       <div className="section-container py-4 sm:py-6">
         {/* Profile Header */}
         <ProfileHeader user={user} />
