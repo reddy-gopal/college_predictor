@@ -25,6 +25,8 @@ from .views import (
     generate_test,
     generate_custom_test,
     preview_room_test_summary,
+    get_performance_summary,
+    get_questions_performance_overview,
 )
 
 router = DefaultRouter()
@@ -55,6 +57,8 @@ urlpatterns = [
     path('generate-test/', generate_test, name='generate_test'),
     path('custom-test/generate/', generate_custom_test, name='generate_custom_test'),
     path('rooms/preview-test-summary/', preview_room_test_summary, name='preview_room_test_summary'),
+    path('performance-summary/', get_performance_summary, name='get_performance_summary'),
+    path('questions-performance-overview/', get_questions_performance_overview, name='get_questions_performance_overview'),
     # Router URLs (must come last)
     path('', include(router.urls)),
 ]

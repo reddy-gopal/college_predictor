@@ -2846,3 +2846,169 @@ def preview_room_test_summary(request):
             'requested_count': validation['requested_count'],
         }
     })
+
+from datetime import timedelta
+from django.db.models import Avg, Count
+from django.db.models.functions import TruncDay
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_performance_summary(request):
+
+    user = request.user
+    if not user.is_authenticated:
+        return Response({
+            'detail': 'Authentication required.'
+        }, status=status.HTTP_401_UNAUTHORIZED)
+    
+    student_profile = StudentProfile.objects.get(user=user)
+    today = timezone.now().date()
+    last_7_days = today - timedelta(days=7)
+    attempts = TestAttempt.objects.filter(student=student_profile ,is_completed=True, started_at__gte=last_7_days, started_at__lte=today)
+    total_attempts = attempts.count()
+    daily_average_score = (attempts.annotate(day = TruncDay('started_at')).values('day').annotate(avg_score = Avg('score'), total_attempts = Count('id')).order_by('day'))
+     
+    today_avg_score = TestAttempt.objects.filter(
+        student=student_profile,
+        is_completed=True,
+        completed_at__date=today
+    ).aggregate(avg_score=Avg('score'))['avg_score']
+    
+    return Response({
+        'total_attempts': total_attempts,
+        'today_avg_score': today_avg_score if today_avg_score else 0,
+        'daily_average_score': daily_average_score
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_questions_performance_overview(request):
+    """
+    Get performance overview based on student's attempted questions.
+    Returns all attempts (not unique, includes duplicates if same question attempted multiple times).
+    Returns:
+    - total_available_questions: Total number of questions available in QuestionBank
+    - total_correct_questions: Total number of questions correctly attempted (all attempts)
+    - total_attempted_questions: Total number of questions attempted (all attempts)
+    - difficulty_breakdown: Breakdown of correct questions by difficulty level (all attempts)
+    - accuracy_by_difficulty: Accuracy breakdown by difficulty level (all attempts)
+    """
+    user = request.user
+    if not user.is_authenticated:
+        return Response({
+            'detail': 'Authentication required.'
+        }, status=status.HTTP_401_UNAUTHORIZED)
+    
+    try:
+        student_profile = StudentProfile.objects.get(user=user)
+    except StudentProfile.DoesNotExist:
+        return Response({
+            'detail': 'Student profile not found.'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    # Get total available questions from QuestionBank
+    total_available_questions = QuestionBank.objects.filter(is_active=True).count()
+    
+    # Get all completed test attempts for this student
+    completed_attempts = TestAttempt.objects.filter(
+        student=student_profile,
+        is_completed=True
+    ).values_list('id', flat=True)
+    
+    if not completed_attempts:
+        # No completed attempts, return empty data
+        all_difficulty_levels = DifficultyLevel.objects.all().order_by('order')
+        difficulty_breakdown = {}
+        accuracy_by_difficulty = {}
+        
+        for difficulty_level in all_difficulty_levels:
+            difficulty_breakdown[difficulty_level.level] = {
+                'level': difficulty_level.level,
+                'display_name': difficulty_level.get_level_display(),
+                'count': 0,
+                'percentage': 0
+            }
+            accuracy_by_difficulty[difficulty_level.level] = {
+                'level': difficulty_level.level,
+                'display_name': difficulty_level.get_level_display(),
+                'total_attempted': 0,
+                'correct': 0,
+                'wrong': 0,
+                'accuracy': 0
+            }
+        
+        return Response({
+            'total_available_questions': total_available_questions,
+            'total_correct_questions': 0,
+            'total_attempted_questions': 0,
+            'total_wrong_questions': 0,
+            'overall_accuracy': 0,
+            'difficulty_breakdown': difficulty_breakdown,
+            'accuracy_by_difficulty': accuracy_by_difficulty
+        }, status=status.HTTP_200_OK)
+    
+    # Get all answers for completed attempts (not unique, includes all attempts)
+    all_answers = StudentAnswer.objects.filter(
+        attempt_id__in=completed_attempts
+    ).exclude(selected_option='').select_related('question_bank', 'question_bank__difficulty_level')
+    
+    # Get all correct answers (all attempts, not unique)
+    correct_answers = all_answers.filter(is_correct=True)
+    
+    # Calculate total correct questions (all attempts)
+    total_correct_questions = correct_answers.count()
+    
+    # Calculate total attempted questions (all attempts)
+    total_attempted_questions = all_answers.count()
+    total_wrong_questions = total_attempted_questions - total_correct_questions
+    
+    # Get all difficulty levels to ensure we include all levels even if count is 0
+    all_difficulty_levels = DifficultyLevel.objects.all().order_by('order')
+    
+    # Group by difficulty level for correct questions (all attempts)
+    difficulty_breakdown = {}
+    for difficulty_level in all_difficulty_levels:
+        # Count all correct answers for this difficulty level
+        count = correct_answers.filter(
+            question_bank__difficulty_level=difficulty_level
+        ).count()
+        
+        difficulty_breakdown[difficulty_level.level] = {
+            'level': difficulty_level.level,
+            'display_name': difficulty_level.get_level_display(),
+            'count': count,
+            'percentage': round((count / total_correct_questions * 100) if total_correct_questions > 0 else 0, 2)
+        }
+    
+    # Calculate accuracy by difficulty level (all attempts)
+    accuracy_by_difficulty = {}
+    for difficulty_level in all_difficulty_levels:
+        # Get all attempted answers for this difficulty level
+        difficulty_answers = all_answers.filter(
+            question_bank__difficulty_level=difficulty_level
+        )
+        total_difficulty_attempted = difficulty_answers.count()
+        
+        # Get correct answers for this difficulty level
+        correct_difficulty_count = difficulty_answers.filter(is_correct=True).count()
+        wrong_difficulty_count = total_difficulty_attempted - correct_difficulty_count
+        
+        accuracy_by_difficulty[difficulty_level.level] = {
+            'level': difficulty_level.level,
+            'display_name': difficulty_level.get_level_display(),
+            'total_attempted': total_difficulty_attempted,
+            'correct': correct_difficulty_count,
+            'wrong': wrong_difficulty_count,
+            'accuracy': round((correct_difficulty_count / total_difficulty_attempted * 100) if total_difficulty_attempted > 0 else 0, 2)
+        }
+    
+    return Response({
+        'total_available_questions': total_available_questions,
+        'total_correct_questions': total_correct_questions,
+        'total_attempted_questions': total_attempted_questions,
+        'total_wrong_questions': total_wrong_questions,
+        'overall_accuracy': round((total_correct_questions / total_attempted_questions * 100) if total_attempted_questions > 0 else 0, 2),
+        'difficulty_breakdown': difficulty_breakdown,
+        'accuracy_by_difficulty': accuracy_by_difficulty
+    }, status=status.HTTP_200_OK)
