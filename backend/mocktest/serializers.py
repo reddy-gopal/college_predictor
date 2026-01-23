@@ -814,7 +814,6 @@ class RoomCreateSerializer(serializers.ModelSerializer):
             'subjects',
             'number_of_questions',
             'time_per_question',
-            'time_buffer',
             'difficulty',
             'question_types',
             'question_type_mix',
@@ -822,8 +821,7 @@ class RoomCreateSerializer(serializers.ModelSerializer):
             'privacy',
             'password',
             'participant_limit',
-            'allow_pause',
-            'start_time',
+            'attempt_mode',
         ]
     
     def validate(self, attrs):
@@ -863,6 +861,7 @@ class RoomCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         """Create room with password hashing."""
         from django.contrib.auth.hashers import make_password
+        from django.utils import timezone
         import secrets
         import string
         
@@ -880,6 +879,11 @@ class RoomCreateSerializer(serializers.ModelSerializer):
             validated_data['password_hash'] = make_password(password)
         elif validated_data.get('privacy') == Room.PUBLIC:
             validated_data['password_hash'] = None
+        
+        # Remove start_time from validated_data - it will be set when host starts the test
+        # Set a placeholder value to satisfy model requirement (will be updated when test starts)
+        validated_data.pop('start_time', None)
+        validated_data['start_time'] = timezone.now()  # Placeholder, will be updated when host starts
         
         # Set host
         validated_data['host'] = self.context['request'].user
@@ -918,6 +922,7 @@ class RoomListSerializer(serializers.ModelSerializer):
             'status',
             'status_display',
             'start_time',
+            'attempt_mode',
             'created_at',
         ]
         read_only_fields = ['id', 'duration', 'created_at']
@@ -965,7 +970,6 @@ class RoomDetailSerializer(serializers.ModelSerializer):
             'number_of_questions',
             'time_per_question',
             'duration',
-            'time_buffer',
             'difficulty',
             'difficulty_display',
             'question_types',
@@ -982,6 +986,7 @@ class RoomDetailSerializer(serializers.ModelSerializer):
             'start_time',
             'status',
             'status_display',
+            'attempt_mode',
             'participants',
             'questions_count',
             'can_be_edited',
@@ -1045,8 +1050,14 @@ class RoomJoinSerializer(serializers.Serializer):
                 'code': 'Room is full.'
             })
         
-        # Check if test already started
-        if room.status != Room.Status.WAITING:
+        # Check if room is expired
+        if room.is_expired():
+            raise serializers.ValidationError({
+                'code': 'This room has expired (24 hours after creation).'
+            })
+        
+        # Allow joining if room is WAITING or ACTIVE (for INDIVIDUAL mode, participants can join after activation)
+        if room.status not in [Room.Status.WAITING, Room.Status.ACTIVE]:
             raise serializers.ValidationError({
                 'code': f'Room is {room.get_status_display().lower()}. Cannot join.'
             })

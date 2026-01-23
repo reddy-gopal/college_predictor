@@ -506,4 +506,55 @@ class RewardHistory(models.Model):
         return f"{self.user.email} - {self.get_reward_type_display()} - {self.credits_awarded} credits @ {self.created_at.strftime('%Y-%m-%d %H:%M:%S')}"
 
 
+class Notification(models.Model):
+    """
+    Reusable notification model for user notifications.
+    Supports different categories (Guild, General, Task, etc.).
+    """
+    class Category(models.TextChoices):
+        GUILD = 'GUILD', 'Guild'
+        GENERAL = 'GENERAL', 'General'
+        TASK = 'TASK', 'Task'
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='notifications',
+        db_index=True,
+        verbose_name='User'
+    )
+    category = models.CharField(
+        max_length=50,
+        choices=Category.choices,
+        db_index=True,
+        verbose_name='Category'
+    )
+    message = models.TextField(
+        verbose_name='Message'
+    )
+    is_read = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name='Is Read'
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name='Created At'
+    )
+
+    class Meta:
+        verbose_name = 'Notification'
+        verbose_name_plural = 'Notifications'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'is_read', '-created_at']),
+            models.Index(fields=['category', '-created_at']),
+        ]
+
+    def __str__(self):
+        read_status = "✓" if self.is_read else "○"
+        return f"{read_status} {self.user.email} - {self.get_category_display()} - {self.message[:50]}"
+
+
 

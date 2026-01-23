@@ -1108,6 +1108,10 @@ class Room(models.Model):
         COMPLETED = "completed", "Completed"
         LOCKED = "locked", "Locked"
 
+    class AttemptMode(models.TextChoices):
+        ALL_AT_ONCE = "ALL_AT_ONCE", "All at once"
+        INDIVIDUAL = "INDIVIDUAL", "Individual"
+
     code = models.CharField(max_length=10, unique=True, db_index=True, verbose_name="Room Code")
     host = models.ForeignKey(
         CustomUser,
@@ -1152,11 +1156,6 @@ class Room(models.Model):
         default=20,
         help_text="Total duration in minutes (auto-calculated: number_of_questions × time_per_question)",
         verbose_name="Total Duration (minutes)"
-    )
-    time_buffer = models.PositiveIntegerField(
-        default=2,
-        help_text="Additional time buffer in minutes (1-2 minutes recommended)",
-        verbose_name="Time Buffer (minutes)"
     )
     
     # Question filtering
@@ -1224,6 +1223,14 @@ class Room(models.Model):
         verbose_name="Status"
     )
     
+    # Attempt mode
+    attempt_mode = models.CharField(
+        max_length=20,
+        choices=AttemptMode.choices,
+        default=AttemptMode.ALL_AT_ONCE,
+        verbose_name="Attempt Mode"
+    )
+    
     # Legacy field (kept for backward compatibility)
     topics = models.JSONField(blank=True, null=True, verbose_name="Topics")
 
@@ -1256,6 +1263,11 @@ class Room(models.Model):
     def can_be_edited(self):
         """Check if room configuration can be edited."""
         return self.status == self.Status.WAITING and self.participants.filter(status=RoomParticipant.JOINED).count() == 0
+
+    def is_expired(self):
+        """Check if room has expired (24 hours after creation)."""
+        from datetime import timedelta
+        return timezone.now() > self.created_at + timedelta(hours=24)
 
     def __str__(self):
         return f"{self.code} ({self.get_privacy_display()}) - {self.get_status_display()}"
@@ -1293,6 +1305,13 @@ class RoomParticipant(models.Model):
         blank=True,
         help_text="Random seed for question/option randomization per participant",
         verbose_name="Randomization Seed"
+    )
+    participant_start_time = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="When this participant started the test (for INDIVIDUAL mode)",
+        verbose_name="Participant Start Time"
     )
 
     class Meta:

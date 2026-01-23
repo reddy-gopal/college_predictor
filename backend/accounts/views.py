@@ -5,11 +5,16 @@ from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .utils import verify_google_token
-from .models import CustomUser, Referral, RewardHistory
+from .models import CustomUser, Referral, RewardHistory, Notification
 from .referral_utils import activate_referral, award_first_login_bonus, calculate_referral_rewards, generate_unique_referral_code
 from mocktest.models import StudentProfile
 from rest_framework.decorators import api_view
 from django.db import transaction
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework import status
+from .models import Notification
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -885,4 +890,132 @@ def list_referees(request):
     
     return Response({
         'referees': referees
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_notifications(request):
+    """
+    Get user's notifications.
+    Returns unread notifications by default, or all if requested.
+    
+    Query params:
+    - all: If true, returns all notifications (read and unread). Default: false (only unread)
+    - limit: Maximum number of notifications to return. Default: 50
+    
+    Returns:
+    {
+        "notifications": [
+            {
+                "id": 1,
+                "category": "GUILD",
+                "category_display": "Guild",
+                "message": "Your Guild results are out.",
+                "is_read": false,
+                "created_at": "2024-01-23T10:00:00Z"
+            },
+            ...
+        ],
+        "unread_count": 5,
+        "total_count": 10
+    }
+    """
+    user = request.user
+    
+    # Get query parameters
+    show_all = request.query_params.get('all', 'false').lower() == 'true'
+    limit = int(request.query_params.get('limit', 50))
+    
+    # Build queryset
+    queryset = Notification.objects.filter(user=user)
+    
+    if not show_all:
+        queryset = queryset.filter(is_read=False)
+    
+    # Order by created_at descending (newest first)
+    queryset = queryset.order_by('-created_at')[:limit]
+    
+    # Serialize notifications
+    notifications = []
+    for notification in queryset:
+        notifications.append({
+            'id': notification.id,
+            'category': notification.category,
+            'category_display': notification.get_category_display(),
+            'message': notification.message,
+            'is_read': notification.is_read,
+            'created_at': notification.created_at.isoformat()
+        })
+    
+    # Get counts
+    unread_count = Notification.objects.filter(user=user, is_read=False).count()
+    total_count = Notification.objects.filter(user=user).count()
+    
+    return Response({
+        'notifications': notifications,
+        'unread_count': unread_count,
+        'total_count': total_count
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def mark_notification_read(request, notification_id):
+    """
+    Mark a notification as read.
+    
+    Returns:
+    {
+        "message": "Notification marked as read",
+        "notification": {...}
+    }
+    """
+    user = request.user
+    
+    try:
+        notification = Notification.objects.get(id=notification_id, user=user)
+    except Notification.DoesNotExist:
+        return Response({
+            'detail': 'Notification not found.'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    notification.is_read = True
+    notification.save()
+    
+    return Response({
+        'message': 'Notification marked as read',
+        'notification': {
+            'id': notification.id,
+            'category': notification.category,
+            'category_display': notification.get_category_display(),
+            'message': notification.message,
+            'is_read': notification.is_read,
+            'created_at': notification.created_at.isoformat()
+        }
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def mark_all_notifications_read(request):
+    """
+    Mark all notifications as read for the current user.
+    
+    Returns:
+    {
+        "message": "All notifications marked as read",
+        "updated_count": 5
+    }
+    """
+    user = request.user
+    
+    updated_count = Notification.objects.filter(
+        user=user,
+        is_read=False
+    ).update(is_read=True)
+    
+    return Response({
+        'message': 'All notifications marked as read',
+        'updated_count': updated_count
     }, status=status.HTTP_200_OK)

@@ -5,7 +5,8 @@ Production-ready admin interface for authentication and logging.
 """
 from django.contrib import admin
 from django.contrib.auth import get_user_model
-from .models import UserLoginLog, UserActivityLog, Referral, RewardHistory
+from django.utils.html import format_html, mark_safe
+from .models import UserLoginLog, UserActivityLog, Referral, RewardHistory, Notification
 
 User = get_user_model()
 
@@ -137,4 +138,44 @@ class RewardHistoryAdmin(admin.ModelAdmin):
             'fields': ('created_at',)
         }),
     )
+
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    """Admin for Notification model."""
+    list_display = ['user', 'category', 'get_message_preview', 'is_read', 'created_at', 'get_read_status']
+    list_filter = ['category', 'is_read', 'created_at']
+    search_fields = ['user__email', 'user__first_name', 'user__last_name', 'message']
+    readonly_fields = ['created_at']
+    date_hierarchy = 'created_at'
+    ordering = ['-created_at']
+    
+    fieldsets = (
+        ('Notification Information', {
+            'fields': ('user', 'category', 'message', 'is_read')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at',),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def get_message_preview(self, obj):
+        """Display a preview of the message (first 60 characters)."""
+        if len(obj.message) > 60:
+            return f"{obj.message[:60]}..."
+        return obj.message
+    get_message_preview.short_description = 'Message Preview'
+    
+    def get_read_status(self, obj):
+        """Display read status with color coding."""
+        if obj.is_read:
+            return mark_safe('<span style="color: green;">✓ Read</span>')
+        return mark_safe('<span style="color: orange; font-weight: bold;">○ Unread</span>')
+    get_read_status.short_description = 'Status'
+    
+    def get_queryset(self, request):
+        """Optimize queryset with select_related."""
+        qs = super().get_queryset(request)
+        return qs.select_related('user')
 

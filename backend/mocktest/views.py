@@ -2016,7 +2016,18 @@ class RoomViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """Filter rooms based on user and status."""
+        from datetime import timedelta
+        
         queryset = Room.objects.all()
+        
+        # Auto-complete expired rooms
+        expired_rooms = queryset.filter(
+            status__in=[Room.Status.WAITING, Room.Status.ACTIVE]
+        ).exclude(
+            created_at__gt=timezone.now() - timedelta(hours=24)
+        )
+        if expired_rooms.exists():
+            expired_rooms.update(status=Room.Status.COMPLETED)
         
         # Filter by status
         status_filter = self.request.query_params.get('status')
@@ -2058,6 +2069,17 @@ class RoomViewSet(viewsets.ModelViewSet):
             })
         
         room = participant.room
+        
+        # Check if room is expired - if so, mark as completed and exclude from active rooms
+        if room.is_expired():
+            if room.status != Room.Status.COMPLETED:
+                room.status = Room.Status.COMPLETED
+                room.save()
+            return Response({
+                'has_active_room': False,
+                'room': None
+            })
+        
         serializer = RoomListSerializer(room, context={'request': request})
         
         return Response({
@@ -2127,6 +2149,11 @@ class RoomViewSet(viewsets.ModelViewSet):
             status=RoomParticipant.JOINED
         )
         
+        # Keep room in WAITING status until host starts it
+        # Room will be activated when host calls /start endpoint
+        room.status = Room.Status.WAITING
+        room.save()
+        
         response_serializer = RoomDetailSerializer(room, context={'request': request})
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
     
@@ -2139,6 +2166,11 @@ class RoomViewSet(viewsets.ModelViewSet):
             return Response({
                 'detail': 'Room not found.'
             }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Auto-complete expired rooms
+        if room.is_expired() and room.status != Room.Status.COMPLETED:
+            room.status = Room.Status.COMPLETED
+            room.save()
         
         serializer = self.get_serializer(room, context={'request': request})
         return Response(serializer.data)
@@ -2153,6 +2185,12 @@ class RoomViewSet(viewsets.ModelViewSet):
         
         room = join_serializer.validated_data['room']
         
+        # Check if room is expired
+        if room.is_expired():
+            return Response({
+                'detail': 'This room has expired (24 hours after creation).'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
         # Check if user already joined
         existing_participant = RoomParticipant.objects.filter(
             room=room,
@@ -2165,6 +2203,8 @@ class RoomViewSet(viewsets.ModelViewSet):
                 'detail': 'You have already joined this room.'
             }, status=status.HTTP_400_BAD_REQUEST)
         
+        # Allow joining if room is not expired and is in WAITING status
+        # Room will be activated when host starts it (not on join)
         # Create participant
         participant = RoomParticipant.objects.create(
             room=room,
@@ -2265,6 +2305,12 @@ class RoomViewSet(viewsets.ModelViewSet):
                 'detail': 'Room not found.'
             }, status=status.HTTP_404_NOT_FOUND)
         
+        # Check if room is expired
+        if room.is_expired():
+            return Response({
+                'detail': 'This room has expired (24 hours after creation).'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
         # Only host can start
         if room.host != request.user:
             return Response({
@@ -2283,20 +2329,21 @@ class RoomViewSet(viewsets.ModelViewSet):
                 'detail': 'No questions generated for this room. Please regenerate questions.'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Check if there are participants (excluding the host)
-        # The host is automatically added as a participant, so we need at least one other participant
-        other_participants = room.participants.filter(
-            status=RoomParticipant.JOINED
-        ).exclude(user=room.host)
-        
-        if other_participants.count() == 0:
+        # Check if questions are generated
+        if room.room_questions.count() == 0:
             return Response({
-                'detail': 'Please invite at least one friend to start the room.'
+                'detail': 'No questions generated for this room. Please regenerate questions.'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Start the test
         room.status = Room.Status.ACTIVE
-        room.start_time = timezone.now()
+        
+        # For ALL_AT_ONCE mode, set start_time to now
+        # For INDIVIDUAL mode, only activate the room (don't set start_time)
+        if room.attempt_mode == Room.AttemptMode.ALL_AT_ONCE:
+            room.start_time = timezone.now()
+        # For INDIVIDUAL mode, room is active but participants start individually
+        
         room.save()
         
         serializer = RoomDetailSerializer(room, context={'request': request})
@@ -2304,7 +2351,7 @@ class RoomViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'], url_path='end')
     def end(self, request, pk=None):
-        """End the test (host only)."""
+        """End the test (host only). Results become available immediately."""
         code = pk.upper() if pk else ''
         room = Room.objects.filter(code=code).first()
         
@@ -2325,9 +2372,27 @@ class RoomViewSet(viewsets.ModelViewSet):
                 'detail': f'Room is not active. Current status: {room.get_status_display()}'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # End the test
+        # End the test - mark as completed so results are immediately available
         room.status = Room.Status.COMPLETED
         room.save()
+        
+        # Create notifications for all participants that results are ready
+        from accounts.models import Notification
+        participants = room.participants.filter(status=RoomParticipant.JOINED)
+        for participant in participants:
+            # Check if notification already exists to avoid duplicates
+            existing_notification = Notification.objects.filter(
+                user=participant.user,
+                category=Notification.Category.GUILD,
+                message=f'Your Guild results for Room {room.code} are out!'
+            ).first()
+            
+            if not existing_notification:
+                Notification.objects.create(
+                    user=participant.user,
+                    category=Notification.Category.GUILD,
+                    message=f'Your Guild results for Room {room.code} are out!'
+                )
         
         serializer = RoomDetailSerializer(room, context={'request': request})
         return Response(serializer.data)
@@ -2343,6 +2408,12 @@ class RoomViewSet(viewsets.ModelViewSet):
                 'detail': 'Room not found.'
             }, status=status.HTTP_404_NOT_FOUND)
         
+        # Check if room is expired - treat as completed
+        if room.is_expired():
+            return Response({
+                'detail': 'This room has expired (24 hours after creation).'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
         # Check if user is a participant
         participant = RoomParticipant.objects.filter(
             room=room,
@@ -2355,11 +2426,23 @@ class RoomViewSet(viewsets.ModelViewSet):
                 'detail': 'You are not a participant in this room.'
             }, status=status.HTTP_403_FORBIDDEN)
         
-        # Check if test has started
+        # Check if room is active (rooms are active immediately when first user joins)
         if room.status != Room.Status.ACTIVE:
             return Response({
-                'detail': f'Test has not started yet. Current status: {room.get_status_display()}'
+                'detail': f'Room is not active. Current status: {room.get_status_display()}'
             }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # For INDIVIDUAL mode, set participant start time on first access
+        participant_start_time = None
+        if room.attempt_mode == Room.AttemptMode.INDIVIDUAL:
+            # Check if participant already has a start time
+            if participant.participant_start_time:
+                participant_start_time = participant.participant_start_time
+            else:
+                # First access - set participant start time to now
+                participant_start_time = timezone.now()
+                participant.participant_start_time = participant_start_time
+                participant.save()
         
         # Get randomized questions for this participant
         questions = randomize_questions_for_participant(participant)
@@ -2382,21 +2465,37 @@ class RoomViewSet(viewsets.ModelViewSet):
                 'question': UnifiedQuestionSerializer(question).data,
                 'attempt': ParticipantAttemptSerializer(attempt).data if attempt else None,
                 'time_per_question_minutes': room.time_per_question,
-                'total_duration_minutes': room.duration + room.time_buffer,
+                'total_duration_minutes': room.duration,
             })
         
-        # Calculate remaining time based on room start_time
-        # This ensures all participants see the same remaining time based on when the room actually started
-        total_duration_seconds = (room.duration + room.time_buffer) * 60
-        elapsed_seconds = (timezone.now() - room.start_time).total_seconds()
+        # Calculate remaining time based on attempt mode
+        total_duration_seconds = room.duration * 60
+        
+        if room.attempt_mode == Room.AttemptMode.ALL_AT_ONCE:
+            # ALL_AT_ONCE: Use room start_time
+            if not room.start_time:
+                return Response({
+                    'detail': 'Room start time not set. Host must start the test first.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            elapsed_seconds = (timezone.now() - room.start_time).total_seconds()
+            start_time_iso = room.start_time.isoformat()
+        else:
+            # INDIVIDUAL: Use participant start time (set above if first access)
+            if not participant_start_time:
+                return Response({
+                    'detail': 'Participant start time not set.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            elapsed_seconds = (timezone.now() - participant_start_time).total_seconds()
+            start_time_iso = participant_start_time.isoformat()
+        
         remaining_seconds = max(0, total_duration_seconds - elapsed_seconds)
         
         return Response({
             'room_code': room.code,
             'total_questions': len(question_data),
             'time_per_question': room.time_per_question,
-            'total_duration': room.duration + room.time_buffer,
-            'start_time': room.start_time.isoformat() if room.start_time else None,
+            'total_duration': room.duration,
+            'start_time': start_time_iso,
             'remaining_seconds': int(remaining_seconds),
             'questions': question_data
         })
@@ -2411,6 +2510,25 @@ class RoomViewSet(viewsets.ModelViewSet):
             return Response({
                 'detail': 'Room not found.'
             }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Check if user is a participant (for results access)
+        participant = None
+        if request.user.is_authenticated:
+            participant = RoomParticipant.objects.filter(
+                room=room,
+                user=request.user,
+                status=RoomParticipant.JOINED
+            ).first()
+        
+        # If requesting results summary, allow if room is manually ended (COMPLETED) OR expired
+        is_manually_ended = room.status == Room.Status.COMPLETED
+        is_expired = room.is_expired()
+        
+        if participant and not is_manually_ended and not is_expired:
+            return Response({
+                'detail': 'Results are not ready yet. Please wait for 24 hours after room creation to see final results.',
+                'results_ready': False
+            }, status=status.HTTP_403_FORBIDDEN)
         
         # Validate question pool
         validation = validate_question_pool(room)
@@ -2431,7 +2549,8 @@ class RoomViewSet(viewsets.ModelViewSet):
                 'auto_adjust_available': not validation['valid'],
                 'available_count': validation['available_count'],
                 'requested_count': validation['requested_count'],
-            }
+            },
+            'results_ready': room.is_expired()
         })
     
     @action(detail=True, methods=['get'], url_path='submission-status')
@@ -2476,18 +2595,17 @@ class RoomViewSet(viewsets.ModelViewSet):
         
         all_submitted = submitted_count == participants.count()
         
-        # Auto-complete room if all participants have submitted and room is still active
-        if all_submitted and room.status == Room.Status.ACTIVE:
-            room.status = Room.Status.COMPLETED
-            room.save()
+        # Don't auto-complete room - wait for 24-hour expiry
+        # Room will be marked as completed when expired (handled in leaderboard/retrieve endpoints)
         
         return Response({
             'room_code': room.code,
             'total_participants': participants.count(),
             'submitted_count': submitted_count,
             'pending_count': participants.count() - submitted_count,
-            'all_submitted': all_submitted or room.status == Room.Status.COMPLETED,
+            'all_submitted': all_submitted,
             'room_status': room.status,
+            'results_ready': room.status == Room.Status.COMPLETED or room.is_expired(),
             'submissions': submission_data
         })
     
@@ -2502,11 +2620,68 @@ class RoomViewSet(viewsets.ModelViewSet):
                 'detail': 'Room not found.'
             }, status=status.HTTP_404_NOT_FOUND)
         
-        # Only show leaderboard if test is completed
-        if room.status != Room.Status.COMPLETED:
-            return Response({
-                'detail': 'Leaderboard is only available after test completion.'
-            }, status=status.HTTP_400_BAD_REQUEST)
+        # Different logic based on attempt_mode
+        is_manually_ended = room.status == Room.Status.COMPLETED
+        is_expired = room.is_expired()
+        
+        if room.attempt_mode == Room.AttemptMode.ALL_AT_ONCE:
+            # For ALL_AT_ONCE: Allow if manually ended OR all participants have submitted
+            participants = room.participants.filter(status=RoomParticipant.JOINED)
+            total_participants = participants.count()
+            
+            if total_participants == 0:
+                return Response({
+                    'detail': 'No participants in this room.',
+                    'results_ready': False
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Count how many participants have submitted all questions
+            submitted_count = 0
+            for participant in participants:
+                total_questions = room.room_questions.count()
+                answered_count = participant.attempts.count()
+                if answered_count >= total_questions:
+                    submitted_count += 1
+            
+            all_submitted = submitted_count == total_participants
+            
+            if not is_manually_ended and not all_submitted:
+                return Response({
+                    'detail': 'Results will be available once all participants have submitted their tests.',
+                    'results_ready': False,
+                    'submitted_count': submitted_count,
+                    'total_participants': total_participants
+                }, status=status.HTTP_403_FORBIDDEN)
+        else:
+            # For INDIVIDUAL: Allow if manually ended OR expired (24 hours after creation)
+            if not is_manually_ended and not is_expired:
+                return Response({
+                    'detail': 'Results are not ready yet. Please wait for 24 hours after room creation to see final results.',
+                    'results_ready': False
+                }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Treat expired rooms as completed (if not already)
+        if is_expired and room.status != Room.Status.COMPLETED:
+            room.status = Room.Status.COMPLETED
+            room.save()
+            
+            # Create notifications for all participants that results are ready (only once)
+            from accounts.models import Notification
+            participants = room.participants.filter(status=RoomParticipant.JOINED)
+            for participant in participants:
+                # Check if notification already exists to avoid duplicates
+                existing_notification = Notification.objects.filter(
+                    user=participant.user,
+                    category=Notification.Category.GUILD,
+                    message=f'Your Guild results for Room {room.code} are out!'
+                ).first()
+                
+                if not existing_notification:
+                    Notification.objects.create(
+                        user=participant.user,
+                        category=Notification.Category.GUILD,
+                        message=f'Your Guild results for Room {room.code} are out!'
+                    )
         
         # Calculate scores for all participants
         participants = room.participants.filter(status=RoomParticipant.JOINED)
@@ -2572,11 +2747,48 @@ class RoomViewSet(viewsets.ModelViewSet):
                 'detail': 'You are not a participant in this room.'
             }, status=status.HTTP_403_FORBIDDEN)
         
-        # Only show review if test is completed
+        # Different logic based on attempt_mode
+        is_manually_ended = room.status == Room.Status.COMPLETED
+        is_expired = room.is_expired()
+        
+        if room.attempt_mode == Room.AttemptMode.ALL_AT_ONCE:
+            # For ALL_AT_ONCE: Allow if manually ended OR all participants have submitted
+            participants = room.participants.filter(status=RoomParticipant.JOINED)
+            total_participants = participants.count()
+            
+            if total_participants == 0:
+                return Response({
+                    'detail': 'No participants in this room.',
+                    'results_ready': False
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Count how many participants have submitted all questions
+            submitted_count = 0
+            for participant in participants:
+                total_questions = room.room_questions.count()
+                answered_count = participant.attempts.count()
+                if answered_count >= total_questions:
+                    submitted_count += 1
+            
+            all_submitted = submitted_count == total_participants
+            
+            if not is_manually_ended and not all_submitted:
+                return Response({
+                    'detail': 'Review is only available after all participants have submitted their tests.',
+                    'results_ready': False
+                }, status=status.HTTP_403_FORBIDDEN)
+        else:
+            # For INDIVIDUAL: Allow if manually ended OR expired (24 hours after creation)
+            if not is_manually_ended and not is_expired:
+                return Response({
+                    'detail': 'Results are not ready yet. Please wait for 24 hours after room creation to see final results.',
+                    'results_ready': False
+                }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Treat expired rooms as completed
         if room.status != Room.Status.COMPLETED:
-            return Response({
-                'detail': 'Review is only available after test completion.'
-            }, status=status.HTTP_400_BAD_REQUEST)
+            room.status = Room.Status.COMPLETED
+            room.save()
         
         # Get all wrong answers for this participant
         wrong_attempts = participant.attempts.filter(is_correct=False)
@@ -2629,11 +2841,48 @@ class RoomViewSet(viewsets.ModelViewSet):
                 'detail': 'You are not a participant in this room.'
             }, status=status.HTTP_403_FORBIDDEN)
         
-        # Only show unattempted if test is completed
-        if room.status != Room.Status.COMPLETED:
-            return Response({
-                'detail': 'Unattempted questions are only available after test completion.'
-            }, status=status.HTTP_400_BAD_REQUEST)
+        # Different logic based on attempt_mode
+        is_manually_ended = room.status == Room.Status.COMPLETED
+        is_expired = room.is_expired()
+        
+        if room.attempt_mode == Room.AttemptMode.ALL_AT_ONCE:
+            # For ALL_AT_ONCE: Allow if manually ended OR all participants have submitted
+            participants = room.participants.filter(status=RoomParticipant.JOINED)
+            total_participants = participants.count()
+            
+            if total_participants == 0:
+                return Response({
+                    'detail': 'No participants in this room.',
+                    'results_ready': False
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Count how many participants have submitted all questions
+            submitted_count = 0
+            for participant in participants:
+                total_questions = room.room_questions.count()
+                answered_count = participant.attempts.count()
+                if answered_count >= total_questions:
+                    submitted_count += 1
+            
+            all_submitted = submitted_count == total_participants
+            
+            if not is_manually_ended and not all_submitted:
+                return Response({
+                    'detail': 'Unattempted questions are only available after all participants have submitted their tests.',
+                    'results_ready': False
+                }, status=status.HTTP_403_FORBIDDEN)
+        else:
+            # For INDIVIDUAL: Allow if manually ended OR expired (24 hours after creation)
+            if not is_manually_ended and not is_expired:
+                return Response({
+                    'detail': 'Unattempted questions are only available after test completion (24 hours after room creation or when host ends the test).',
+                    'results_ready': False
+                }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Treat expired rooms as completed (if not already)
+        if is_expired and room.status != Room.Status.COMPLETED:
+            room.status = Room.Status.COMPLETED
+            room.save()
         
         # Get all room questions
         room_questions = room.room_questions.all().order_by('question_number')
@@ -2699,13 +2948,61 @@ class ParticipantAttemptViewSet(viewsets.ModelViewSet):
                 'detail': 'You are not a participant in this room.'
             }, status=status.HTTP_403_FORBIDDEN)
         
+        # Check if room is expired - treat as completed
+        if room.is_expired():
+            return Response({
+                'detail': 'This room has expired (24 hours after creation). Cannot submit answers.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
         # Check if test is active
         if room.status != Room.Status.ACTIVE:
             return Response({
                 'detail': f'Test is not active. Current status: {room.get_status_display()}'
             }, status=status.HTTP_400_BAD_REQUEST)
         
+        # Validate remaining time based on attempt mode
+        total_duration_seconds = room.duration * 60
+        current_time = timezone.now()
+        
+        if room.attempt_mode == Room.AttemptMode.ALL_AT_ONCE:
+            # ALL_AT_ONCE: Validate based on room start_time
+            if not room.start_time:
+                return Response({
+                    'detail': 'Room start time not set. Host must start the test first.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            elapsed_seconds = (current_time - room.start_time).total_seconds()
+            remaining_seconds = total_duration_seconds - elapsed_seconds
+            
+            if remaining_seconds <= 0:
+                return Response({
+                    'detail': 'Time has expired. Cannot submit answers.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            # INDIVIDUAL: Validate based on participant start time
+            participant_start_time = participant.participant_start_time
+            
+            if participant_start_time:
+                elapsed_seconds = (current_time - participant_start_time).total_seconds()
+                remaining_seconds = total_duration_seconds - elapsed_seconds
+                
+                if remaining_seconds <= 0:
+                    return Response({
+                        'detail': 'Time has expired for your attempt.'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                # If participant hasn't started yet, set start time now (first submission)
+                participant_start_time = current_time
+                participant.participant_start_time = participant_start_time
+                participant.save()
+        
         # Get or create attempt
+        # For INDIVIDUAL mode, use participant start time if set, otherwise use now
+        if room.attempt_mode == Room.AttemptMode.INDIVIDUAL:
+            attempt_started_at = participant.participant_start_time or timezone.now()
+        else:
+            attempt_started_at = serializer.validated_data.get('started_at') or timezone.now()
+        
         attempt, created = ParticipantAttempt.objects.get_or_create(
             participant=participant,
             room_question=room_question,
@@ -2713,7 +3010,7 @@ class ParticipantAttemptViewSet(viewsets.ModelViewSet):
                 'selected_option': serializer.validated_data.get('selected_option'),
                 'answer_text': serializer.validated_data.get('answer_text'),
                 'time_spent_seconds': serializer.validated_data.get('time_spent_seconds', 0),
-                'started_at': serializer.validated_data.get('started_at'),
+                'started_at': attempt_started_at,
                 'submitted_at': timezone.now(),
             }
         )
@@ -2724,7 +3021,7 @@ class ParticipantAttemptViewSet(viewsets.ModelViewSet):
             attempt.answer_text = serializer.validated_data.get('answer_text', attempt.answer_text)
             attempt.time_spent_seconds = serializer.validated_data.get('time_spent_seconds', attempt.time_spent_seconds)
             if not attempt.started_at:
-                attempt.started_at = serializer.validated_data.get('started_at')
+                attempt.started_at = attempt_started_at
             attempt.submitted_at = timezone.now()
             attempt.save()
         
@@ -2778,8 +3075,26 @@ class ParticipantAttemptViewSet(viewsets.ModelViewSet):
         attempt.marks_obtained = marks_obtained
         attempt.save()
         
-        response_serializer = ParticipantAttemptSerializer(attempt)
-        return Response(response_serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+        # Check if participant has submitted all questions
+        total_questions = room.room_questions.count()
+        answered_count = participant.attempts.count()
+        has_submitted_all = answered_count >= total_questions
+        
+        response_data = {
+            'attempt': ParticipantAttemptSerializer(attempt).data,
+            'has_submitted_all': has_submitted_all,
+        }
+        
+        # If all questions submitted, check if room is expired
+        if has_submitted_all:
+            if room.is_expired():
+                # Room expired - results are ready
+                response_data['message'] = 'Your results are ready! Check the leaderboard.'
+            else:
+                # Room not expired - show wait message
+                response_data['message'] = 'Thanks for submitting! Please wait for 24 hours to see final results.'
+        
+        return Response(response_data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
 
 @api_view(['GET'])

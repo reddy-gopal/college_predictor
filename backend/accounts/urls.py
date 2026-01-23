@@ -12,5 +12,8 @@ urlpatterns = [
     path('referral/process/', views.process_referral_code, name='process_referral_code'),
     path('referral/stats/', views.get_referral_stats, name='referral_stats'),
     path('referee/', views.list_referees, name='list_referees'),
+    path('notifications/', views.get_notifications, name='get_notifications'),
+    path('notifications/<int:notification_id>/read/', views.mark_notification_read, name='mark_notification_read'),
+    path('notifications/read-all/', views.mark_all_notifications_read, name='mark_all_notifications_read'),
 ]
 
