@@ -40,7 +40,7 @@ export default function PublicHome() {
         <div className="text-center max-w-4xl mx-auto">
           <h1 className="text-4xl md:text-6xl font-bold text-niat-text mb-6 leading-tight">
             Practice Smart.{' '}
-            <span className="text-gradient">Predict Your Rank.</span>{' '}
+            <span className="text-[#991B1B]">Predict Your Rank.</span>{' '}
             Choose the Right College.
           </h1>
           <p className="text-xl text-niat-text-secondary mb-8 max-w-2xl mx-auto">

@@ -18,7 +18,6 @@ export default function CreateRoomPage() {
     subjects: [],
     number_of_questions: 10,
     time_per_question: 2.0,
-    time_buffer: 2,
     difficulty: 'mixed',
     question_types: [],
     question_type_mix: 'mixed',
@@ -26,9 +25,7 @@ export default function CreateRoomPage() {
     privacy: 'public',
     password: '',
     participant_limit: 0,
-    allow_pause: false,
-    start_time: 'now',
-    scheduled_time: '',
+    attempt_mode: 'ALL_AT_ONCE',
   });
   const [errors, setErrors] = useState({});
   const [summary, setSummary] = useState(null);
@@ -117,9 +114,6 @@ export default function CreateRoomPage() {
     if (formData.privacy === 'private' && !formData.password) {
       newErrors.password = 'Password is required for private rooms';
     }
-    if (formData.start_time === 'scheduled' && !formData.scheduled_time) {
-      newErrors.scheduled_time = 'Scheduled time is required';
-    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -168,16 +162,12 @@ export default function CreateRoomPage() {
         subject_mode: formData.subject_mode,
         number_of_questions: parseInt(formData.number_of_questions),
         time_per_question: parseFloat(formData.time_per_question),
-        time_buffer: parseInt(formData.time_buffer),
         difficulty: formData.difficulty,
         question_type_mix: formData.question_type_mix,
         randomization_mode: formData.randomization_mode,
         privacy: formData.privacy,
         participant_limit: parseInt(formData.participant_limit) || 0,
-        allow_pause: formData.allow_pause,
-        start_time: formData.start_time === 'now' 
-          ? new Date().toISOString() 
-          : new Date(formData.scheduled_time).toISOString(),
+        attempt_mode: formData.attempt_mode,
       };
 
       if (formData.subject_mode === 'specific') {
@@ -402,20 +392,6 @@ export default function CreateRoomPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Time Buffer (minutes)
-                </label>
-                <input
-                  type="number"
-                  name="time_buffer"
-                  value={formData.time_buffer}
-                  onChange={handleChange}
-                  min="0"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
                   Total Duration
                 </label>
                 <div className="px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-gray-700">
@@ -478,19 +454,6 @@ export default function CreateRoomPage() {
                   <option value="question_order">Randomize Question Order</option>
                   <option value="question_and_options">Randomize Questions & Options</option>
                 </select>
-              </div>
-
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  name="allow_pause"
-                  checked={formData.allow_pause}
-                  onChange={handleChange}
-                  className="mr-2"
-                />
-                <label className="text-sm font-medium text-gray-700">
-                  Allow participants to pause the test
-                </label>
               </div>
             </div>
           </div>
@@ -567,47 +530,32 @@ export default function CreateRoomPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Start Time *
+                  How should participants attempt the test? *
                 </label>
-                <div className="flex gap-4 mb-2">
+                <div className="space-y-2">
                   <label className="flex items-center">
                     <input
                       type="radio"
-                      name="start_time"
-                      value="now"
-                      checked={formData.start_time === 'now'}
+                      name="attempt_mode"
+                      value="ALL_AT_ONCE"
+                      checked={formData.attempt_mode === 'ALL_AT_ONCE'}
                       onChange={handleChange}
                       className="mr-2"
                     />
-                    Start Now
+                    All participants start together
                   </label>
                   <label className="flex items-center">
                     <input
                       type="radio"
-                      name="start_time"
-                      value="scheduled"
-                      checked={formData.start_time === 'scheduled'}
+                      name="attempt_mode"
+                      value="INDIVIDUAL"
+                      checked={formData.attempt_mode === 'INDIVIDUAL'}
                       onChange={handleChange}
                       className="mr-2"
                     />
-                    Scheduled
+                    Participants start individually
                   </label>
                 </div>
-                {formData.start_time === 'scheduled' && (
-                  <input
-                    type="datetime-local"
-                    name="scheduled_time"
-                    value={formData.scheduled_time}
-                    onChange={handleChange}
-                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent ${
-                      errors.scheduled_time ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    required={formData.start_time === 'scheduled'}
-                  />
-                )}
-                {errors.scheduled_time && (
-                  <p className="mt-1 text-sm text-red-600">{errors.scheduled_time}</p>
-                )}
               </div>
             </div>
           </div>

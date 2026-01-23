@@ -26,7 +26,7 @@ export default function RootLayout({ children }) {
           strategy="afterInteractive"
         />
       </head>
-      <body className="min-h-screen bg-white text-niat-text antialiased flex flex-col">
+      <body className="min-h-screen bg-white text-niat-text antialiased flex flex-col" suppressHydrationWarning>
         <AuthProvider>
           <Navbar />
           <main className="flex-1 pt-10 md:pt-13">{children}</main>

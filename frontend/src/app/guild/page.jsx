@@ -361,7 +361,16 @@ function RoomCard({ room, currentUser, onJoin, onStart, onEnd, onViewParticipant
   const router = useRouter();
   const isHost = room.host === currentUser?.id || room.host_email === currentUser?.email;
   const isFull = room.is_full;
-  const canJoin = room.status === 'waiting' && !isFull && !isHost;
+  // Allow joining if:
+  // 1. Room is waiting (any mode)
+  // 2. Room is active AND attempt_mode is INDIVIDUAL (participants can join after activation)
+  const canJoin = !isFull && !isHost && (
+    room.status === 'waiting' || 
+    (room.status === 'active' && room.attempt_mode === 'INDIVIDUAL')
+  );
+  // For active INDIVIDUAL rooms where user can't join (e.g., already a participant or full),
+  // show "View Lobby" instead of disabled button
+  const showViewLobby = room.status === 'active' && room.attempt_mode === 'INDIVIDUAL' && !isHost && !canJoin;
 
   const getStatusBadge = (status) => {
     const badges = {
@@ -454,6 +463,14 @@ function RoomCard({ room, currentUser, onJoin, onStart, onEnd, onViewParticipant
               </button>
             )}
           </>
+        ) : showViewLobby ? (
+          // For active INDIVIDUAL rooms, show "View Lobby" - allows joining from lobby
+          <button
+            onClick={() => router.push(`/guild/${room.code}/lobby`)}
+            className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+          >
+            View Lobby
+          </button>
         ) : canJoin ? (
           <button
             onClick={onJoin}

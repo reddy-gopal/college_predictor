@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { roomApi } from '@/lib/api';
+import AllAtOnceResults from '@/components/guild/AllAtOnceResults';
+import IndividualResults from '@/components/guild/IndividualResults';
 
 export default function RoomResultsPage() {
   const router = useRouter();
@@ -25,48 +27,47 @@ export default function RoomResultsPage() {
   const [showUnattempted, setShowUnattempted] = useState(false);
   const [loadingUnattempted, setLoadingUnattempted] = useState(false);
   const [showSolution, setShowSolution] = useState({});
-
-  useEffect(() => {
-    // Wait for auth to finish loading before checking user
-    if (authLoading) {
-      return;
-    }
-    
-    // Only redirect if auth has finished loading and user is still null
-    if (!user) {
-      const sessionToken = typeof window !== 'undefined' ? sessionStorage.getItem('auth_token') : null;
-      if (!sessionToken) {
-        router.push('/login');
-      }
-      return;
-    }
-    
-    if (code) {
-      checkSubmissionStatus();
-      // Poll for submission status every 5 seconds
-      const interval = setInterval(() => {
-        checkSubmissionStatus();
-      }, 5000);
-      
-      return () => clearInterval(interval);
-    }
-  }, [code, user, authLoading]);
+  const [timeUntilResults, setTimeUntilResults] = useState(null);
+  const [submissionData, setSubmissionData] = useState([]);
 
   const checkSubmissionStatus = async () => {
     if (!user) return;
     
+    // If we already have leaderboard, don't make unnecessary requests
+    if (allSubmitted && leaderboard.length > 0) {
+      return;
+    }
+    
     try {
-      // Fetch room details
+      // Fetch room details first to check status
       const roomResponse = await roomApi.getRoomByCode(code);
       const roomData = roomResponse.data;
       setRoom(roomData);
       
-      // Fetch participants
-      const participantsResponse = await roomApi.getParticipants(code);
-      const participantsData = participantsResponse.data;
-      setParticipants(participantsData);
+      // If room is completed, skip other checks and go straight to leaderboard
+      if (roomData.status === 'completed' && leaderboard.length === 0) {
+        try {
+          const leaderboardResponse = await roomApi.getLeaderboard(code);
+          const leaderboardData = leaderboardResponse.data;
+          setLeaderboard(leaderboardData.leaderboard || []);
+          setAllSubmitted(true);
+          setTimeUntilResults(0);
+          // Set participants from leaderboard if available
+          if (leaderboardData.leaderboard && leaderboardData.leaderboard.length > 0) {
+            const participantsFromLeaderboard = leaderboardData.leaderboard.map(entry => ({
+              user_email: entry.user_email,
+              user_name: entry.user_name,
+            }));
+            setParticipants(participantsFromLeaderboard);
+          }
+          return; // Exit early, no need for other requests
+        } catch (err) {
+          // If leaderboard fails, continue with normal flow
+          console.error('Error fetching leaderboard:', err);
+        }
+      }
       
-      // Check submission status from backend
+      // For active rooms, fetch submission status (which includes participants data)
       try {
         const statusResponse = await roomApi.getSubmissionStatus(code);
         const statusData = statusResponse.data;
@@ -77,16 +78,54 @@ export default function RoomResultsPage() {
           pending: statusData.pending_count,
         });
         
-        // If all submitted, try to fetch leaderboard
-        if (statusData.all_submitted || statusData.room_status === 'completed') {
-          try {
-            const leaderboardResponse = await roomApi.getLeaderboard(code);
-            const leaderboardData = leaderboardResponse.data;
-            setLeaderboard(leaderboardData.leaderboard || []);
+        // Store submission data for participant list (includes participant info)
+        setSubmissionData(statusData.submissions || []);
+        
+        // Extract participants from submission data if available
+        if (statusData.submissions && statusData.submissions.length > 0) {
+          const participantsFromSubmissions = statusData.submissions.map(sub => ({
+            user_email: sub.user_email,
+            user_name: sub.user_name,
+            participant_id: sub.participant_id,
+          }));
+          setParticipants(participantsFromSubmissions);
+        }
+        
+        // Calculate time until results (24 hours after room creation) - only if not completed
+        if (roomData.status !== 'completed' && roomData.created_at) {
+          const createdAt = new Date(roomData.created_at);
+          const resultsTime = new Date(createdAt.getTime() + 24 * 60 * 60 * 1000); // 24 hours
+          const now = new Date();
+          const timeRemaining = Math.max(0, resultsTime - now);
+          setTimeUntilResults(timeRemaining);
+        } else if (roomData.status === 'completed') {
+          setTimeUntilResults(0);
+        }
+        
+        // If all submitted OR room is completed (manually ended by host), try to fetch leaderboard
+        if (statusData.all_submitted || statusData.room_status === 'completed' || roomData.status === 'completed') {
+          // Only fetch leaderboard if we don't already have it
+          if (leaderboard.length === 0) {
+            try {
+              const leaderboardResponse = await roomApi.getLeaderboard(code);
+              const leaderboardData = leaderboardResponse.data;
+              setLeaderboard(leaderboardData.leaderboard || []);
+              setAllSubmitted(true);
+              setTimeUntilResults(0); // Clear countdown since results are ready
+            } catch (err) {
+              // Leaderboard might not be ready yet (403 if room not expired and not completed)
+              if (err.response?.status === 403) {
+                // Room not expired yet and not manually ended - show wait message
+                setAllSubmitted(false);
+                setError(null); // Don't show error, show engaging waiting page instead
+              } else {
+                // Other error - but all have submitted
+                setAllSubmitted(statusData.all_submitted || roomData.status === 'completed');
+              }
+            }
+          } else {
+            // Already have leaderboard, just mark as submitted
             setAllSubmitted(true);
-          } catch (err) {
-            // Leaderboard might not be ready yet, but all have submitted
-            setAllSubmitted(statusData.all_submitted);
           }
         } else {
           setAllSubmitted(false);
@@ -106,7 +145,12 @@ export default function RoomResultsPage() {
               pending: 0,
             });
           } catch (leaderboardErr) {
-            setError(leaderboardErr.response?.data?.detail || 'Failed to check submission status');
+            // If 403, room not expired - show wait message
+            if (leaderboardErr.response?.status === 403) {
+              setError(leaderboardErr.response?.data?.detail || 'Results are not ready yet. Please wait for 24 hours after room creation to see final results.');
+            } else {
+              setError(leaderboardErr.response?.data?.detail || 'Failed to check submission status');
+            }
           }
         } else {
           setError(err.response?.data?.detail || 'Failed to check submission status');
@@ -119,6 +163,64 @@ export default function RoomResultsPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    // Wait for auth to finish loading before checking user
+    if (authLoading) {
+      return;
+    }
+    
+    // Only redirect if auth has finished loading and user is still null
+    if (!user) {
+      const sessionToken = typeof window !== 'undefined' ? sessionStorage.getItem('auth_token') : null;
+      if (!sessionToken) {
+        router.push('/login');
+      }
+      return;
+    }
+    
+    if (code) {
+      checkSubmissionStatus();
+    }
+  }, [code, user, authLoading]);
+
+  // Poll for updates only if results are not ready yet
+  // Increase interval to 10 seconds to reduce load
+  useEffect(() => {
+    if (!code || !user || allSubmitted || leaderboard.length > 0) {
+      return; // Don't poll if results are ready
+    }
+    
+    const interval = setInterval(() => {
+      checkSubmissionStatus();
+    }, 10000); // Poll every 10 seconds instead of 5
+    
+    return () => clearInterval(interval);
+  }, [code, user, allSubmitted, leaderboard.length]);
+
+  // Countdown timer effect
+  useEffect(() => {
+    if (!timeUntilResults || timeUntilResults <= 0) return;
+    
+    const timer = setInterval(() => {
+      setTimeUntilResults((prev) => {
+        if (prev <= 1000) {
+          // Time's up, refresh to check for results
+          return 0;
+        }
+        return prev - 1000;
+      });
+    }, 1000);
+    
+    return () => clearInterval(timer);
+  }, [timeUntilResults]);
+  
+  // Refresh when countdown reaches zero
+  useEffect(() => {
+    if (timeUntilResults === 0 && code && user) {
+      checkSubmissionStatus();
+    }
+  }, [timeUntilResults, code, user]);
 
   const handleEndTest = async () => {
     if (!confirm('Are you sure you want to end the test? This will finalize results for all participants, even if some haven\'t submitted yet.')) {
@@ -187,6 +289,19 @@ export default function RoomResultsPage() {
     return `${minutes}m ${secs}s`;
   };
 
+  const formatCountdown = (milliseconds) => {
+    const totalSeconds = Math.floor(milliseconds / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    
+    return {
+      hours: hours.toString().padStart(2, '0'),
+      minutes: minutes.toString().padStart(2, '0'),
+      seconds: seconds.toString().padStart(2, '0'),
+    };
+  };
+
   if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-gray-50 pt-24 pb-12 flex items-center justify-center">
@@ -241,145 +356,44 @@ export default function RoomResultsPage() {
           </div>
         </div>
 
-        {/* Submission Status */}
-        {!allSubmitted && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mb-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-bold text-yellow-900 mb-2">
-                  Waiting for All Participants to Submit
-                </h2>
-                {submissionStatus && (
-                  <p className="text-yellow-700">
-                    {submissionStatus.submitted} of {submissionStatus.total} participants have submitted
-                    {submissionStatus.pending > 0 && ` (${submissionStatus.pending} pending)`}
-                  </p>
-                )}
-              </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold text-yellow-900">
-                  {submissionStatus ? `${submissionStatus.submitted}/${submissionStatus.total}` : '...'}
-                </div>
-                <div className="text-sm text-yellow-700">Submitted</div>
-              </div>
-            </div>
-            <div className="mt-4 w-full bg-yellow-200 rounded-full h-2">
-              <div
-                className="bg-yellow-600 h-2 rounded-full transition-all"
-                style={{
-                  width: submissionStatus
-                    ? `${(submissionStatus.submitted / submissionStatus.total) * 100}%`
-                    : '0%',
-                }}
-              ></div>
-            </div>
-            <p className="text-sm text-yellow-700 mt-4">
-              Results will be displayed automatically once all participants have submitted their tests.
-            </p>
-          </div>
+        {/* Render appropriate component based on attempt_mode */}
+        {room?.attempt_mode === 'ALL_AT_ONCE' ? (
+          <AllAtOnceResults
+            code={code}
+            room={room}
+            user={user}
+            leaderboard={leaderboard}
+            setLeaderboard={setLeaderboard}
+            allSubmitted={allSubmitted}
+            setAllSubmitted={setAllSubmitted}
+            submissionStatus={submissionStatus}
+            setSubmissionStatus={setSubmissionStatus}
+            participants={participants}
+            setParticipants={setParticipants}
+            submissionData={submissionData}
+            setSubmissionData={setSubmissionData}
+          />
+        ) : (
+          <IndividualResults
+            code={code}
+            room={room}
+            user={user}
+            leaderboard={leaderboard}
+            setLeaderboard={setLeaderboard}
+            allSubmitted={allSubmitted}
+            setAllSubmitted={setAllSubmitted}
+            submissionStatus={submissionStatus}
+            setSubmissionStatus={setSubmissionStatus}
+            participants={participants}
+            setParticipants={setParticipants}
+            submissionData={submissionData}
+            setSubmissionData={setSubmissionData}
+            timeUntilResults={timeUntilResults}
+            setTimeUntilResults={setTimeUntilResults}
+          />
         )}
 
-        {/* Leaderboard */}
-        {allSubmitted && leaderboard.length > 0 && (
-          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Leaderboard</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b-2 border-gray-200">
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Rank</th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Participant</th>
-                    <th className="text-right py-3 px-4 font-semibold text-gray-700">Score</th>
-                    <th className="text-right py-3 px-4 font-semibold text-gray-700">Percentage</th>
-                    <th className="text-right py-3 px-4 font-semibold text-gray-700">Correct</th>
-                    <th className="text-right py-3 px-4 font-semibold text-gray-700">Wrong</th>
-                    <th className="text-right py-3 px-4 font-semibold text-gray-700">Time</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {leaderboard.map((entry, idx) => {
-                    const isCurrentUser = entry.user_email === user?.email;
-                    return (
-                      <tr
-                        key={entry.participant_id}
-                        className={`border-b border-gray-100 hover:bg-gray-50 ${
-                          isCurrentUser ? 'bg-primary/5' : ''
-                        }`}
-                      >
-                        <td className="py-4 px-4">
-                          <div className="flex items-center">
-                            {entry.rank === 1 && <span className="text-2xl mr-2">🥇</span>}
-                            {entry.rank === 2 && <span className="text-2xl mr-2">🥈</span>}
-                            {entry.rank === 3 && <span className="text-2xl mr-2">🥉</span>}
-                            <span className={`font-bold ${isCurrentUser ? 'text-primary' : 'text-gray-900'}`}>
-                              {entry.rank}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="py-4 px-4">
-                          <div>
-                            <div className={`font-medium ${isCurrentUser ? 'text-primary' : 'text-gray-900'}`}>
-                              {entry.user_name}
-                              {isCurrentUser && <span className="ml-2 text-xs text-primary">(You)</span>}
-                            </div>
-                            <div className="text-sm text-gray-500">{entry.user_email}</div>
-                          </div>
-                        </td>
-                        <td className="py-4 px-4 text-right">
-                          <span className="font-bold text-gray-900">
-                            {entry.total_score.toFixed(1)} / {entry.total_marks.toFixed(1)}
-                          </span>
-                        </td>
-                        <td className="py-4 px-4 text-right">
-                          <span className={`font-semibold ${
-                            entry.percentage >= 80 ? 'text-green-600' :
-                            entry.percentage >= 60 ? 'text-yellow-600' :
-                            'text-red-600'
-                          }`}>
-                            {entry.percentage.toFixed(1)}%
-                          </span>
-                        </td>
-                        <td className="py-4 px-4 text-right text-green-600 font-medium">
-                          {entry.correct_count}
-                        </td>
-                        <td className="py-4 px-4 text-right text-red-600 font-medium">
-                          {entry.wrong_count}
-                        </td>
-                        <td className="py-4 px-4 text-right text-gray-600">
-                          {formatTime(entry.total_time_seconds)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* Summary Stats */}
-        {allSubmitted && leaderboard.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <div className="text-sm text-gray-600 mb-1">Total Participants</div>
-              <div className="text-3xl font-bold text-gray-900">{leaderboard.length}</div>
-            </div>
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <div className="text-sm text-gray-600 mb-1">Average Score</div>
-              <div className="text-3xl font-bold text-gray-900">
-                {leaderboard.length > 0
-                  ? (leaderboard.reduce((sum, e) => sum + e.total_score, 0) / leaderboard.length).toFixed(1)
-                  : '0.0'}
-              </div>
-            </div>
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <div className="text-sm text-gray-600 mb-1">Highest Score</div>
-              <div className="text-3xl font-bold text-green-600">
-                {leaderboard.length > 0 ? leaderboard[0].total_score.toFixed(1) : '0.0'}
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Review and Unattempted sections - shown after results are available */}
 
         {/* Review Section */}
         {allSubmitted && (

@@ -168,6 +168,10 @@ export const authApi = {
       getReferees: () => api.get('/api/auth/referee/'),
       sendOTP: (phone) => api.post('/api/auth/send-otp/', { phone }),
       verifyOTP: (phone, otp) => api.post('/api/auth/verify-otp/', { phone, otp }),
+      // Notification APIs
+      getNotifications: (params) => api.get('/api/auth/notifications/', { params }),
+      markNotificationRead: (notificationId) => api.post(`/api/auth/notifications/${notificationId}/read/`),
+      markAllNotificationsRead: () => api.post('/api/auth/notifications/read-all/'),
 };
 
 export default api;

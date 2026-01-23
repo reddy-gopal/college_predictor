@@ -170,7 +170,7 @@ export default function RoomTestPage() {
   };
 
   const handleSubmitAnswer = async (roomQuestionId) => {
-    if (!answers[roomQuestionId]) return;
+    if (!answers[roomQuestionId]) return null;
     
     try {
       const answerData = {
@@ -181,12 +181,14 @@ export default function RoomTestPage() {
         started_at: answers[roomQuestionId].started_at || new Date().toISOString(),
       };
       
-      await roomApi.submitAnswer(answerData);
+      const response = await roomApi.submitAnswer(answerData);
+      return response;
     } catch (err) {
       console.error('Error submitting answer:', err);
       if (typeof window !== 'undefined' && window.showToast) {
         window.showToast('Failed to save answer', 'error');
       }
+      throw err;
     }
   };
 
@@ -225,31 +227,44 @@ export default function RoomTestPage() {
       setSubmitting(true);
       
       // Submit all answers
+      let lastResponse = null;
       for (const question of questions) {
         if (answers[question.room_question_id]) {
-          await handleSubmitAnswer(question.room_question_id);
+          const response = await handleSubmitAnswer(question.room_question_id);
+          lastResponse = response;
         } else {
           // Submit empty answer for unanswered questions
-          await roomApi.submitAnswer({
+          const response = await roomApi.submitAnswer({
             room_question: question.room_question_id,
             selected_option: '',
             answer_text: '',
             time_spent_seconds: 0,
             started_at: new Date().toISOString(),
           });
+          lastResponse = response;
         }
       }
       
+      // Check if all questions submitted from the last response
+      const hasSubmittedAll = lastResponse?.data?.has_submitted_all || false;
+      const submitMessage = lastResponse?.data?.message || 'Test submitted successfully!';
+      
       if (typeof window !== 'undefined' && window.showToast) {
-        window.showToast('Test submitted successfully!', 'success');
+        window.showToast(submitMessage, hasSubmittedAll ? 'success' : 'info');
       }
       
-      // Navigate to results
-      router.push(`/guild/${code}/results`);
+      // Navigate to results (or lobby if results not ready)
+      if (hasSubmittedAll) {
+        router.push(`/guild/${code}/results`);
+      } else {
+        // Not all submitted yet, go back to lobby
+        router.push(`/guild/${code}/lobby`);
+      }
     } catch (err) {
       console.error('Error submitting test:', err);
+      const errorMsg = err.response?.data?.detail || 'Failed to submit test';
       if (typeof window !== 'undefined' && window.showToast) {
-        window.showToast('Failed to submit test', 'error');
+        window.showToast(errorMsg, 'error');
       }
     } finally {
       setSubmitting(false);

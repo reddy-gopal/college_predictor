@@ -21,6 +21,7 @@ export default function WaitingLobbyPage() {
   const [showKickModal, setShowKickModal] = useState(false);
   const [showStartModal, setShowStartModal] = useState(false);
   const [kickUserId, setKickUserId] = useState(null);
+  const [hasSubmitted, setHasSubmitted] = useState(false);
 
   useEffect(() => {
     // Wait for auth to finish loading before checking user
@@ -37,20 +38,41 @@ export default function WaitingLobbyPage() {
     if (code) {
       fetchRoom();
       fetchParticipants();
+      // Only poll if room is not completed
       const interval = setInterval(() => {
         fetchRoom();
         fetchParticipants();
-      }, 5000); // Refresh every 5 seconds
+      }, 10000); // Refresh every 10 seconds instead of 5 to reduce load
       return () => clearInterval(interval);
     }
   }, [code, user, authLoading, router]);
 
+  // Check submission status when room becomes active
   useEffect(() => {
-    if (room?.status === 'active') {
-      // Navigate to test page when room becomes active
+    if (room && room.status === 'active' && user && !hasSubmitted) {
+      checkSubmissionStatus();
+      // Also check periodically, but stop if user has submitted
+      const interval = setInterval(() => {
+        if (!hasSubmitted) {
+          checkSubmissionStatus();
+        }
+      }, 10000); // Poll every 10 seconds instead of 5
+      return () => clearInterval(interval);
+    } else {
+      // Reset hasSubmitted when room is not active
+      if (room?.status !== 'active') {
+        setHasSubmitted(false);
+      }
+    }
+  }, [room?.status, room?.id, user, code, hasSubmitted]);
+
+  useEffect(() => {
+    // Only auto-navigate to test for ALL_AT_ONCE mode
+    // For INDIVIDUAL mode, participants start their test manually from lobby
+    if (room?.status === 'active' && room?.attempt_mode === 'ALL_AT_ONCE') {
       router.push(`/guild/${code}/test`);
     }
-  }, [room?.status, code]);
+  }, [room?.status, room?.attempt_mode, code]);
 
   const fetchRoom = async () => {
     try {
@@ -91,6 +113,44 @@ export default function WaitingLobbyPage() {
         return;
       }
       console.error('Error fetching participants:', err);
+    }
+  };
+
+  const checkSubmissionStatus = async () => {
+    if (!user || !room || room.status !== 'active' || !code) {
+      setHasSubmitted(false);
+      return;
+    }
+    
+    try {
+      const response = await roomApi.getSubmissionStatus(code);
+      const submissionData = response.data.submissions || [];
+      
+      // Find current user's submission by email (case-insensitive)
+      const userEmail = user.email?.toLowerCase().trim();
+      const currentUserSubmission = submissionData.find(
+        (sub) => {
+          const subEmail = sub.user_email?.toLowerCase().trim();
+          return subEmail === userEmail;
+        }
+      );
+      
+      if (currentUserSubmission) {
+        const submitted = currentUserSubmission.has_submitted_all === true;
+        setHasSubmitted(submitted);
+      } else {
+        // User not found in submissions, assume not submitted
+        setHasSubmitted(false);
+      }
+    } catch (err) {
+      // If submission status endpoint fails, assume not submitted
+      if (err.response?.status === 400 && err.response?.data?.detail?.includes('not active')) {
+        // Room not active yet, that's fine
+        setHasSubmitted(false);
+      } else if (err.response?.status !== 400) {
+        console.error('Error checking submission status:', err);
+        setHasSubmitted(false);
+      }
     }
   };
 
@@ -158,7 +218,10 @@ export default function WaitingLobbyPage() {
     }, 3000); // 3 seconds for countdown
   };
 
-  const isHost = room?.is_host || room?.host === user?.id || room?.host_email === user?.email;
+  // Check if user is host - try multiple ways to determine this
+  const isHost = room?.is_host === true || 
+                 (room?.host && user?.id && String(room.host) === String(user.id)) ||
+                 (room?.host_email && user?.email && room.host_email.toLowerCase() === user.email.toLowerCase());
   
   // Filter out the host from participants count (host is automatically a participant)
   // We need to identify the host by comparing user IDs or emails
@@ -275,23 +338,97 @@ export default function WaitingLobbyPage() {
               </div>
             </div>
 
-            {/* Host Controls */}
-            {isHost && room.status === 'waiting' && (
+            {/* Host Controls - Show for waiting rooms */}
+            {isHost && (room.status === 'waiting' || room.status === 'WAITING') && (
               <div className="bg-white rounded-lg shadow p-6">
                 <h2 className="text-xl font-bold text-gray-900 mb-4">Host Controls</h2>
                 <div className="space-y-3">
                   <button
                     onClick={handleStartClick}
-                    disabled={!hasOtherParticipants}
+                    disabled={room.attempt_mode === 'ALL_AT_ONCE' && !hasOtherParticipants}
                     className="w-full px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Start Test
+                    {room.attempt_mode === 'INDIVIDUAL' ? 'Activate Room' : 'Start Test'}
                   </button>
-                  <p className={`text-sm ${!hasOtherParticipants ? 'text-red-600 font-medium' : 'text-gray-600'}`}>
-                    {!hasOtherParticipants 
-                      ? 'Invite at least one friend to Start the Room'
-                      : `${otherParticipants.length} participant(s) ready`}
+                  <p className={`text-sm ${room.attempt_mode === 'ALL_AT_ONCE' && !hasOtherParticipants ? 'text-red-600 font-medium' : 'text-gray-600'}`}>
+                    {room.attempt_mode === 'INDIVIDUAL'
+                      ? 'Activate the room to allow participants to start their tests. You can also start your test after activation.'
+                      : !hasOtherParticipants 
+                        ? 'Invite at least one friend to Start the Room'
+                        : `${otherParticipants.length} participant(s) ready`}
                   </p>
+                </div>
+              </div>
+            )}
+
+            {/* Host Start Test Button for INDIVIDUAL Mode (after activation) */}
+            {isHost && room.status === 'active' && room.attempt_mode === 'INDIVIDUAL' && (
+              <div className="bg-white rounded-lg shadow p-6">
+                <h2 className="text-xl font-bold text-gray-900 mb-4">
+                  {hasSubmitted ? 'Test Submitted!' : 'Ready to Start?'}
+                </h2>
+                <div className="space-y-3">
+                  {hasSubmitted ? (
+                    <>
+                      <button
+                        onClick={() => router.push(`/guild/${code}/results`)}
+                        className="w-full px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
+                      >
+                        Return to Results
+                      </button>
+                      <p className="text-sm text-gray-600">
+                        You've completed your test! View results and see how you compare with others.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => router.push(`/guild/${code}/test`)}
+                        className="w-full px-6 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors"
+                      >
+                        Start My Test
+                      </button>
+                      <p className="text-sm text-gray-600">
+                        You can start your test anytime. Your timer will begin when you click this button.
+                      </p>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Start Test / Return to Results Button for INDIVIDUAL Mode */}
+            {room.status === 'active' && room.attempt_mode === 'INDIVIDUAL' && !isHost && (
+              <div className="bg-white rounded-lg shadow p-6">
+                <h2 className="text-xl font-bold text-gray-900 mb-4">
+                  {hasSubmitted ? 'Test Submitted!' : 'Ready to Start?'}
+                </h2>
+                <div className="space-y-3">
+                  {hasSubmitted ? (
+                    <>
+                      <button
+                        onClick={() => router.push(`/guild/${code}/results`)}
+                        className="w-full px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
+                      >
+                        Return to Results
+                      </button>
+                      <p className="text-sm text-gray-600">
+                        You've completed your test! View results and see how you compare with others.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => router.push(`/guild/${code}/test`)}
+                        className="w-full px-6 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors"
+                      >
+                        Start My Test
+                      </button>
+                      <p className="text-sm text-gray-600">
+                        You can start your test anytime. Your timer will begin when you click this button.
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
             )}
@@ -338,10 +475,13 @@ export default function WaitingLobbyPage() {
         {room.status === 'waiting' && !isHost && (
           <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-6 text-center">
             <p className="text-blue-800 font-medium">
-              Waiting for host to start the test...
+              {room.attempt_mode === 'INDIVIDUAL' 
+                ? 'Waiting for host to activate the room. Once activated, you can start your test anytime.'
+                : 'Waiting for host to start the test...'}
             </p>
           </div>
         )}
+
       </div>
 
       {/* Confirmation Modals */}
@@ -363,9 +503,11 @@ export default function WaitingLobbyPage() {
         isOpen={showStartModal}
         onClose={() => setShowStartModal(false)}
         onConfirm={handleStart}
-        title="Start Test"
-        message="Are you sure you want to start this test? All participants will begin immediately."
-        confirmText="Start Test"
+        title={room?.attempt_mode === 'INDIVIDUAL' ? 'Activate Room' : 'Start Test'}
+        message={room?.attempt_mode === 'INDIVIDUAL' 
+          ? 'Are you sure you want to activate this room? Participants will be able to start their tests individually.'
+          : 'Are you sure you want to start this test? All participants will begin immediately.'}
+        confirmText={room?.attempt_mode === 'INDIVIDUAL' ? 'Activate Room' : 'Start Test'}
         cancelText="Cancel"
         variant="default"
       />

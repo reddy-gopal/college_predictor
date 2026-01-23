@@ -130,8 +130,8 @@ export default function Navbar() {
       <nav
         className={`fixed ${activeRoom && !isRoomBannerDismissed ? 'top-10' : 'top-0'} left-0 right-0 z-50 transition-all duration-300 w-full bg-white shadow-sm`}
       >
-        <div className="w-full pt-4 pb-6 bg-white">
-          <div className={`bg-niat-navbar rounded-2xl shadow-sm px-4 sm:px-6 lg:px-8 py-4 mx-4 sm:mx-6 lg:mx-8 ${activeRoom && !isRoomBannerDismissed ? '' : 'mt-0'}`}>
+        <div className={`w-full pt-4 bg-white ${activeRoom && !isRoomBannerDismissed ? 'pb-8' : 'pb-6'}`}>
+          <div className={`bg-niat-navbar rounded-2xl shadow-sm px-4 sm:px-6 lg:px-8 py-4 mx-4 sm:mx-6 lg:mx-8`}>
             <div className="flex items-center justify-between">
               {/* Logo */}
               <Link href="/" className="flex items-center space-x-2 sm:space-x-3 group flex-shrink-0 max-w-[60%] sm:max-w-none">
@@ -210,6 +210,14 @@ export default function Navbar() {
                       className="block px-4 py-2 text-sm text-niat-text hover:bg-niat-section"
                     >
                       Mistake Notebook
+                    </Link>
+                    <Link
+                      href="/notifications"
+                      onClick={() => setIsProfileMenuOpen(false)}
+                      className="block px-4 py-2 text-sm text-niat-text hover:bg-niat-section flex items-center gap-2"
+                    >
+                      <span>🔔</span>
+                      <span>Notifications</span>
                     </Link>
                     <Link
                       href="/referral"
@@ -301,6 +309,13 @@ export default function Navbar() {
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
                     Profile
+                  </Link>
+                  <Link
+                    href="/notifications"
+                    className="btn-secondary w-full text-sm py-2.5 text-center block"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    🔔 Notifications
                   </Link>
                   <Link
                     href="/referral"
