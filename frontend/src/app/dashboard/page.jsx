@@ -10,13 +10,12 @@ export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [stats, setStats] = useState({
-    latestScore: null,
+    averageScore: null,
     bestPercentile: null,
     predictedRank: null,
     xp: 0,
     nextLevelXP: 100,
   });
-  const [testHistory, setTestHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const { user: authUser, loading: authLoading } = useAuth();
 
@@ -35,21 +34,29 @@ export default function DashboardPage() {
   const loadDashboardData = async () => {
     try {
       setLoading(true);
-      // TODO: Load actual data from APIs
-      // For now, use mock data
-      setStats({
-        latestScore: 320,
-        bestPercentile: 85.5,
-        predictedRank: 'Safe',
-        xp: 750,
-        nextLevelXP: 1000,
-      });
+      
+      // Fetch stats from backend
+      const statsResponse = await mockTestApi.getStats();
+      const { average_score, best_percentile } = statsResponse.data;
 
-      // Load test attempts
-      // const attempts = await mockTestApi.getUserAttempts();
-      // setTestHistory(attempts);
+      // TODO: Load XP and predicted rank from actual APIs
+      setStats({
+        averageScore: average_score,
+        bestPercentile: best_percentile,
+        predictedRank: 'Safe', // TODO: Get from actual API
+        xp: 750, // TODO: Get from actual API
+        nextLevelXP: 1000, // TODO: Get from actual API
+      });
     } catch (error) {
       console.error('Error loading dashboard:', error);
+      // Set defaults on error
+      setStats({
+        averageScore: null,
+        bestPercentile: null,
+        predictedRank: null,
+        xp: 0,
+        nextLevelXP: 100,
+      });
     } finally {
       setLoading(false);
     }
@@ -93,14 +100,14 @@ export default function DashboardPage() {
         {/* Current Snapshot Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <SnapshotCard
-            label="Latest Score"
-            value={stats.latestScore || 'N/A'}
+            label="Average Score"
+            value={stats.averageScore !== null ? stats.averageScore.toFixed(1) : 'N/A'}
             icon="📊"
             color="#FFF1C6"
           />
           <SnapshotCard
             label="Best Percentile"
-            value={stats.bestPercentile ? `${stats.bestPercentile}%` : 'N/A'}
+            value={stats.bestPercentile !== null ? `${stats.bestPercentile.toFixed(1)}%` : 'N/A'}
             icon="🏆"
             color="secondary"
           />

@@ -29,7 +29,7 @@ export default function RootLayout({ children }) {
       <body className="min-h-screen bg-white text-niat-text antialiased flex flex-col" suppressHydrationWarning>
         <AuthProvider>
           <Navbar />
-          <main className="flex-1 pt-10 md:pt-13">{children}</main>
+          <main className="flex-1 pt-10 md:pt-13 transition-all duration-300">{children}</main>
           <Footer />
           <ToastContainer />
         </AuthProvider>

@@ -19,35 +19,28 @@ export default function TestAttemptsSummary() {
       setLoading(true);
       setError(null);
       
-      // Fetch user's test attempts to calculate summary
-      const response = await mockTestApi.getUserAttempts({});
-      const attempts = response.data?.results || response.data || [];
+      // Fetch user's test attempts for counts and best score
+      const attemptsResponse = await mockTestApi.getUserAttempts({});
+      const attempts = attemptsResponse.data?.results || attemptsResponse.data || [];
       
       // Filter completed attempts
       const completedAttempts = attempts.filter(
         (attempt) => attempt.completed_at && attempt.score !== null
       );
 
-      // Calculate summary
+      // Calculate counts (simple aggregations)
       const total = attempts.length;
       const completed = completedAttempts.length;
-      const scores = completedAttempts.map((a) => a.score || 0);
-      const percentiles = completedAttempts.map((a) => a.percentile || 0);
 
-      const avgScore = scores.length > 0
-        ? scores.reduce((a, b) => a + b, 0) / scores.length
-        : 0;
-      const bestScore = scores.length > 0 ? Math.max(...scores) : 0;
-      const avgPercentile = percentiles.length > 0
-        ? percentiles.reduce((a, b) => a + b, 0) / percentiles.length
-        : 0;
+      // Fetch stats from backend (average_score and best_score)
+      const statsResponse = await mockTestApi.getStats();
+      const { average_score, best_score } = statsResponse.data;
 
       setSummary({
         total_tests: total,
         completed_tests: completed,
-        average_score: avgScore,
-        best_score: bestScore,
-        average_percentile: avgPercentile,
+        average_score: average_score,
+        best_score: best_score,
       });
     } catch (err) {
       console.error('Error fetching test attempts summary:', err);
@@ -106,7 +99,7 @@ export default function TestAttemptsSummary() {
           </button>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
           <SummaryCard
             label="Total Tests"
             value={summary?.total_tests || 0}
@@ -124,12 +117,6 @@ export default function TestAttemptsSummary() {
             value={summary?.best_score ? summary.best_score.toFixed(1) : '—'}
             icon="🏆"
             color="accent-1"
-          />
-          <SummaryCard
-            label="Avg Percentile"
-            value={summary?.average_percentile ? `${summary.average_percentile.toFixed(1)}%` : '—'}
-            icon="📉"
-            color="accent-2"
           />
         </div>
       </div>

@@ -463,6 +463,14 @@ function RoomCard({ room, currentUser, onJoin, onStart, onEnd, onViewParticipant
               </button>
             )}
           </>
+        ) : room.has_submitted && room.status === 'active' ? (
+          // User has submitted their test, show "Return to Results"
+          <button
+            onClick={() => router.push(`/guild/${room.code}/results`)}
+            className="w-full px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
+          >
+            Return to Results
+          </button>
         ) : showViewLobby ? (
           // For active INDIVIDUAL rooms, show "View Lobby" - allows joining from lobby
           <button

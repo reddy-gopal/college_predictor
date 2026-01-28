@@ -68,6 +68,21 @@ export default function Navbar() {
     }
   }, [user, pathname]);
 
+  // Update body data attribute when banner is visible
+  useEffect(() => {
+    const hasBanner = activeRoom && !isRoomBannerDismissed;
+    if (hasBanner) {
+      document.body.setAttribute('data-has-room-banner', 'true');
+    } else {
+      document.body.removeAttribute('data-has-room-banner');
+    }
+    
+    // Cleanup on unmount
+    return () => {
+      document.body.removeAttribute('data-has-room-banner');
+    };
+  }, [activeRoom, isRoomBannerDismissed]);
+
   // Close profile menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {

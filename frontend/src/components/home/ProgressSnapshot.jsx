@@ -4,19 +4,31 @@ import { getXPProgress } from '@/lib/gamification';
 import { useEffect, useState } from 'react';
 
 export default function ProgressSnapshot({ stats, activity, user }) {
-  const [recentTests, setRecentTests] = useState(activity?.recentTests || []);
+  const [averageScore, setAverageScore] = useState(null);
+  const [bestScore, setBestScore] = useState(null);
+  const [loading, setLoading] = useState(true);
   
-  // Update when activity changes (real-time updates)
+  // Fetch stats from backend
   useEffect(() => {
-    if (activity?.recentTests) {
-      setRecentTests(activity.recentTests);
-    }
-  }, [activity?.recentTests]);
-
-  const latestTest = recentTests.length > 0 ? recentTests[0] : null;
-  const bestPercentile = recentTests.length > 0
-    ? Math.max(...recentTests.map((t) => t.percentile || 0))
-    : null;
+    const fetchStats = async () => {
+      try {
+        setLoading(true);
+        const { mockTestApi } = await import('@/lib/api');
+        const response = await mockTestApi.getStats();
+        const { average_score, best_score } = response.data;
+        setAverageScore(average_score);
+        setBestScore(best_score);
+      } catch (error) {
+        console.error('Error fetching stats:', error);
+        setAverageScore(null);
+        setBestScore(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchStats();
+  }, []);
 
   // Format exam target for display
   const getExamTarget = () => {
@@ -39,16 +51,16 @@ export default function ProgressSnapshot({ stats, activity, user }) {
 
   return (
     <>
-      {/* Row 1: Latest Score & Best Percentile */}
+      {/* Row 1: Average Score & Best Score */}
       <SnapshotCard
-        label="Latest Score"
-        value={latestTest ? latestTest.score.toFixed(1) : '—'}
+        label="Average Score"
+        value={loading ? '...' : (averageScore !== null ? averageScore.toFixed(1) : '—')}
         icon="📊"
         color="primary"
       />
       <SnapshotCard
-        label="Best Percentile"
-        value={bestPercentile ? `${bestPercentile.toFixed(1)}%` : '—'}
+        label="Best Score"
+        value={loading ? '...' : (bestScore !== null && !isNaN(bestScore) ? bestScore.toFixed(1) : '—')}
         icon="🏆"
         color="secondary"
       />

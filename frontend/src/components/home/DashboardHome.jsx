@@ -15,7 +15,6 @@ export default function DashboardHome() {
   const { user, refreshUser } = useAuth();
   const [testAttempts, setTestAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [hasActiveRoomBanner, setHasActiveRoomBanner] = useState(false);
 
   const fetchTestAttempts = useCallback(async () => {
     if (!user) {
@@ -49,46 +48,6 @@ export default function DashboardHome() {
   useEffect(() => {
     fetchTestAttempts();
   }, [user]);
-
-  // Check if active room banner is actually visible by checking navbar position
-  useEffect(() => {
-    const checkBannerVisibility = () => {
-      // Find the navbar element and check its top position
-      // If navbar is at top-10 (40px), banner is visible; if at top-0, banner is not visible
-      const navbar = document.querySelector('nav[class*="fixed"]');
-      if (navbar) {
-        const computedStyle = window.getComputedStyle(navbar);
-        const topValue = computedStyle.top;
-        // Convert to number (e.g., "40px" -> 40)
-        const topPx = parseFloat(topValue) || 0;
-        // Banner is visible if navbar is pushed down (top > 0)
-        setHasActiveRoomBanner(topPx > 0);
-      } else {
-        setHasActiveRoomBanner(false);
-      }
-    };
-
-    // Check immediately after a small delay to ensure DOM is ready
-    const initialCheck = setTimeout(checkBannerVisibility, 100);
-
-    // Use MutationObserver to watch for navbar changes
-    const observer = new MutationObserver(checkBannerVisibility);
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ['class', 'style']
-    });
-
-    // Also check periodically as a fallback
-    const interval = setInterval(checkBannerVisibility, 500);
-
-    return () => {
-      clearTimeout(initialCheck);
-      observer.disconnect();
-      clearInterval(interval);
-    };
-  }, []);
 
   // Refresh test attempts when user data changes (e.g., after completing a test)
   useEffect(() => {
@@ -137,7 +96,7 @@ export default function DashboardHome() {
 
   if (loading) {
     return (
-      <div className={`${hasActiveRoomBanner ? 'pt-28 md:pt-32' : 'pt-16 md:pt-20'} min-h-screen bg-white flex items-center justify-center`}>
+      <div className="pt-16 md:pt-20 min-h-screen bg-white flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-niat-primary"></div>
       </div>
     );
@@ -182,7 +141,7 @@ export default function DashboardHome() {
   };
 
   return (
-    <div className={`${hasActiveRoomBanner ? 'pt-28 md:pt-32' : 'pt-16 md:pt-20'} min-h-screen bg-white`}>
+    <div className="pt-16 md:pt-20 min-h-screen bg-white">
       <div className="section-container py-6">
         {/* Greeting Header */}
         <div className="card bg-gradient-to-r from-[#220000] to-[#974039] text-white mb-6">

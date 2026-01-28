@@ -87,6 +87,7 @@ export const mockTestApi = {
   createAttempt: (data) => api.post('/mocktest/test-attempts/', data),
   getAttempt: (id) => api.get(`/mocktest/test-attempts/${id}/`),
   getUserAttempts: (params) => api.get('/mocktest/test-attempts/', { params }),
+  getStats: () => api.get('/mocktest/test-attempts/stats/'),
   submitAnswer: (attemptId, data) => api.post(`/mocktest/test-attempts/${attemptId}/submit_answer/`, data),
   submitTest: (attemptId) => api.post(`/mocktest/test-attempts/${attemptId}/submit/`),
   getAttemptAnswers: (attemptId) => api.get(`/mocktest/test-attempts/${attemptId}/answers/`),
@@ -173,6 +174,20 @@ export const authApi = {
       markNotificationRead: (notificationId) => api.post(`/api/auth/notifications/${notificationId}/read/`),
       markAllNotificationsRead: () => api.post('/api/auth/notifications/read-all/'),
 };
+
+export const ScholarshipApi = {
+  getAppliedScholarships: () => api.get('/scholorship/applied-scholarships/'),
+  getScholarships: (params) => api.get('/scholorship/scholarships/', { params }),
+  getScholarshipBySlug: (slug) => api.get(`/scholorship/scholarships/${slug}/`),
+  getScholarshipEligibilityRules: (scholarshipSlug) => api.get(`/scholorship/scholarship-eligibility-rules/?scholarship_slug=${scholarshipSlug}`),
+  createInteraction: (data) => api.post('/scholorship/scholarship-interactions/', data),
+  updateInteraction: (id, data) => api.patch(`/scholorship/scholarship-interactions/${id}/`, data),
+  getInteraction: (scholarshipSlug) => api.get(`/scholorship/scholarship-interactions/?scholarship_slug=${scholarshipSlug}`),
+  handleNotificationResponse: (notificationId, response) => api.post('/scholorship/handle-notification-response/', { notification_id: notificationId, response }),
+  // Onboarding APIs
+  getOnboarding: () => api.get('/scholorship/scholarship-onboarding/'),
+  createOrUpdateOnboarding: (data) => api.post('/scholorship/scholarship-onboarding/', data),
+}
 
 export default api;
 

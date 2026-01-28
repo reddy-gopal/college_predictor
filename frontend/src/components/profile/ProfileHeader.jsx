@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import Avatar from '@/components/common/Avatar';
 
 export default function ProfileHeader({ user }) {
   const router = useRouter();
@@ -24,17 +25,11 @@ export default function ProfileHeader({ user }) {
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6 p-4 md:p-6">
         {/* Profile Image */}
         <div className="flex-shrink-0 mx-auto sm:mx-0">
-          {user?.google_picture ? (
-            <img
-              src={user.google_picture}
-              alt={fullName}
-              className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border-4 border-niat-primary/20"
-            />
-          ) : (
-            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-niat-primary to-accent-1 flex items-center justify-center text-white text-2xl sm:text-3xl font-bold border-4 border-niat-primary/20">
-              {fullName.charAt(0).toUpperCase()}
-            </div>
-          )}
+          <Avatar
+            name={fullName}
+            size="w-20 h-20 sm:w-24 sm:h-24"
+            className="border-4 border-niat-primary/20"
+          />
         </div>
 
         {/* User Info */}

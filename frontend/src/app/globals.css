@@ -1,6 +1,9 @@
+/* stylelint-disable */
+/* Tailwind CSS directives - these are valid and processed by PostCSS */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+/* stylelint-enable */
 
 @layer base {
   :root {
@@ -13,6 +16,11 @@
     --accent-1: #f7b801;
     --accent-2: #f18701;
     --accent-3: #f35b04;
+    --room-banner-height: 0px;
+  }
+  
+  body[data-has-room-banner="true"] {
+    --room-banner-height: 1.5rem; /* ~24px */
   }
 
   * {
@@ -76,6 +84,50 @@
 @layer utilities {
   .text-gradient {
     @apply bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent;
+  }
+}
+
+/* Extra padding when room banner is visible (banner height is ~2.5rem/40px) */
+body[data-has-room-banner="true"] main {
+  padding-top: calc(2.5rem + var(--room-banner-height)) !important;
+}
+
+@media (min-width: 768px) {
+  body[data-has-room-banner="true"] main {
+    padding-top: calc(3.25rem + var(--room-banner-height)) !important;
+  }
+}
+
+/* Add banner height to page containers with common padding classes */
+/* Using attribute selector to match classes containing pt-16, pt-20, pt-24 */
+body[data-has-room-banner="true"] [class*="pt-16"]:not(main):not(nav):not(header):not(footer) {
+  padding-top: calc(4rem + var(--room-banner-height)) !important;
+}
+
+body[data-has-room-banner="true"] [class*="pt-20"]:not(main):not(nav):not(header):not(footer) {
+  padding-top: calc(5rem + var(--room-banner-height)) !important;
+}
+
+body[data-has-room-banner="true"] [class*="pt-24"]:not(main):not(nav):not(header):not(footer) {
+  padding-top: calc(6rem + var(--room-banner-height)) !important;
+}
+
+/* Media query variants - these will override the base classes on md+ screens */
+@media (min-width: 768px) {
+  body[data-has-room-banner="true"] [class*="md:pt-16"]:not(main):not(nav):not(header):not(footer) {
+    padding-top: calc(4rem + var(--room-banner-height)) !important;
+  }
+  
+  body[data-has-room-banner="true"] [class*="md:pt-20"]:not(main):not(nav):not(header):not(footer) {
+    padding-top: calc(5rem + var(--room-banner-height)) !important;
+  }
+  
+  body[data-has-room-banner="true"] [class*="md:pt-24"]:not(main):not(nav):not(header):not(footer) {
+    padding-top: calc(6rem + var(--room-banner-height)) !important;
+  }
+  
+  body[data-has-room-banner="true"] [class*="md:pt-28"]:not(main):not(nav):not(header):not(footer) {
+    padding-top: calc(7rem + var(--room-banner-height)) !important;
   }
 }
 
