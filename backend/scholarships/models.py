@@ -1,14 +1,14 @@
-
 from django.db import models
-from django.conf import settings
-from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
-
+from django.utils.text import slugify
+from accounts.models import CustomUser
 
 class Scholarship(models.Model):
     """
-    Scholarship definition with eligibility criteria.
+    Read-only scholarship listing.
+    Users are redirected to official scholarship page.
     """
+
     class ScholarshipType(models.TextChoices):
         MERIT_BASED = 'merit_based', 'Merit Based'
         NEED_BASED = 'need_based', 'Need Based'
@@ -19,390 +19,336 @@ class Scholarship(models.Model):
         OTHER = 'other', 'Other'
 
     class Status(models.TextChoices):
-        DRAFT = 'draft', 'Draft'
         ACTIVE = 'active', 'Active'
         CLOSED = 'closed', 'Closed'
         ARCHIVED = 'archived', 'Archived'
 
-    title = models.CharField(
-        max_length=255,
-        db_index=True,
-        verbose_name='Scholarship Title'
-    )
-    description = models.TextField(
-        verbose_name='Description'
-    )
+    title = models.CharField(max_length=255, db_index=True)
+    slug = models.SlugField(max_length=255, unique=True, db_index=True)
+    description = models.TextField()
+
     provider_name = models.CharField(
         max_length=255,
-        db_index=True,
-        verbose_name='Provider Name',
-        help_text='Organization providing the scholarship'
+        db_index=True
     )
-    provider_website = models.URLField(
-        blank=True,
-        verbose_name='Provider Website'
+
+    official_url = models.URLField(
+        help_text='Official scholarship application page',
+        null=True,
+        blank=True
     )
+
     scholarship_type = models.CharField(
         max_length=50,
         choices=ScholarshipType.choices,
-        db_index=True,
-        verbose_name='Scholarship Type'
+        db_index=True
     )
+
     amount = models.DecimalField(
         max_digits=12,
         decimal_places=2,
         null=True,
-        blank=True,
-        verbose_name='Scholarship Amount',
-        help_text='Amount in INR (null if variable)'
+        blank=True
     )
+
     amount_description = models.CharField(
         max_length=255,
         blank=True,
-        verbose_name='Amount Description',
-        help_text='Description if amount is variable (e.g., "Up to 50,000")'
+        help_text='Example: Up to ₹50,000'
     )
-    application_deadline = models.DateTimeField(
+
+    application_deadline = models.DateField(
         null=True,
         blank=True,
-        db_index=True,
-        verbose_name='Application Deadline'
+        db_index=True
     )
+
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
-        default=Status.DRAFT,
-        db_index=True,
-        verbose_name='Status'
+        default=Status.ACTIVE,
+        db_index=True
     )
-    is_active = models.BooleanField(
-        default=True,
-        db_index=True,
-        verbose_name='Is Active'
-    )
+
     eligibility_rules = models.JSONField(
         default=dict,
         blank=True,
-        verbose_name='Eligibility Rules',
-        help_text='Structured eligibility criteria (JSON) for rule engine'
+        help_text='Fast eligibility filtering'
     )
-    required_documents = models.JSONField(
-        default=list,
-        blank=True,
-        verbose_name='Required Documents',
-        help_text='List of required document types'
-    )
-    application_instructions = models.TextField(
-        blank=True,
-        verbose_name='Application Instructions'
-    )
-    created_at = models.DateTimeField(
-        default=timezone.now,
-        verbose_name='Created At'
-    )
-    updated_at = models.DateTimeField(
-        auto_now=True,
-        verbose_name='Updated At'
-    )
+
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = 'Scholarship'
-        verbose_name_plural = 'Scholarships'
-        ordering = ['-created_at', 'title']
+        ordering = ['application_deadline', 'title']
         indexes = [
-            models.Index(fields=['status', 'is_active', '-application_deadline']),
+            models.Index(fields=['status', 'application_deadline']),
             models.Index(fields=['scholarship_type', 'status']),
-            models.Index(fields=['provider_name', 'status']),
+            models.Index(fields=['provider_name']),
         ]
 
+    def save(self, *args, **kwargs):
+        """Auto-generate slug from title if not set.
+        
+        For SEO purposes, slugs are generated once and remain stable.
+        Only generate if slug is empty to preserve existing URLs.
+        """
+        if not self.slug and self.title:
+            base_slug = slugify(self.title)
+            if not base_slug:  # Handle edge case where title doesn't generate a valid slug
+                base_slug = f"scholarship-{self.pk or 'new'}"
+            
+            slug = base_slug
+            counter = 1
+            
+            # Ensure slug is unique
+            while Scholarship.objects.filter(slug=slug).exclude(pk=self.pk).exists():
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+            
+            self.slug = slug
+        
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return f"{self.title} - {self.provider_name}"
+        return self.title
 
 
 class ScholarshipEligibilityRule(models.Model):
     """
-    Detailed eligibility rules for scholarships.
-    Allows flexible rule definition for future rule engine.
+    Structured eligibility rules for scholarship filtering.
     """
+
     class RuleType(models.TextChoices):
         MIN_AGE = 'min_age', 'Minimum Age'
         MAX_AGE = 'max_age', 'Maximum Age'
         MIN_INCOME = 'min_income', 'Minimum Family Income'
         MAX_INCOME = 'max_income', 'Maximum Family Income'
         MIN_PERCENTAGE = 'min_percentage', 'Minimum Percentage'
-        EXAM_SCORE = 'exam_score', 'Exam Score Requirement'
-        STATE = 'state', 'State Requirement'
-        CATEGORY = 'category', 'Category Requirement'
-        GENDER = 'gender', 'Gender Requirement'
+        STATE = 'state', 'State'
+        CATEGORY = 'category', 'Category'
+        GENDER = 'gender', 'Gender'
         CUSTOM = 'custom', 'Custom Rule'
 
     scholarship = models.ForeignKey(
         Scholarship,
         on_delete=models.CASCADE,
-        related_name='detailed_eligibility_rules',
-        db_index=True,
-        verbose_name='Scholarship'
+        related_name='eligibility_rule_list',
+        db_index=True
     )
+
     rule_type = models.CharField(
         max_length=50,
         choices=RuleType.choices,
-        db_index=True,
-        verbose_name='Rule Type'
-    )
-    rule_value = models.JSONField(
-        default=dict,
-        verbose_name='Rule Value',
-        help_text='Rule parameters (e.g., {"min": 18, "max": 25} for age)'
-    )
-    description = models.CharField(
-        max_length=500,
-        blank=True,
-        verbose_name='Description',
-        help_text='Human-readable description of the rule'
-    )
-    is_required = models.BooleanField(
-        default=True,
-        verbose_name='Is Required',
-        help_text='If False, this is an optional/preferred criterion'
-    )
-    order = models.PositiveIntegerField(
-        default=0,
-        db_index=True,
-        verbose_name='Display Order'
-    )
-    created_at = models.DateTimeField(
-        default=timezone.now,
-        verbose_name='Created At'
+        db_index=True
     )
 
+    rule_value = models.JSONField(
+        help_text='Example: {"min": 18, "max": 25}'
+    )
+
+    description = models.CharField(
+        max_length=255,
+        blank=True
+    )
+
+    order = models.PositiveIntegerField(default=0)
+
+    created_at = models.DateTimeField(default=timezone.now)
+
     class Meta:
-        verbose_name = 'Scholarship Eligibility Rule'
-        verbose_name_plural = 'Scholarship Eligibility Rules'
-        ordering = ['scholarship', 'order', 'rule_type']
+        ordering = ['order']
         indexes = [
-            models.Index(fields=['scholarship', 'is_required', 'order']),
+            models.Index(fields=['rule_type']),
+            models.Index(fields=['scholarship', 'rule_type']),
         ]
 
     def __str__(self):
-        return f"{self.scholarship.title} - {self.get_rule_type_display()}"
+        return f"{self.scholarship.title} - {self.rule_type}"
 
 
-class ScholarshipApplication(models.Model):
+class ScholarshipInteraction(models.Model):
     """
-    Student's application for a scholarship.
-    Tracks application lifecycle and status.
+    Lightweight application status tracking.
+    No real application or verification.
     """
-    class ApplicationStatus(models.TextChoices):
-        DRAFT = 'draft', 'Draft'
-        SUBMITTED = 'submitted', 'Submitted'
-        UNDER_REVIEW = 'under_review', 'Under Review'
-        APPROVED = 'approved', 'Approved'
-        REJECTED = 'rejected', 'Rejected'
-        WITHDRAWN = 'withdrawn', 'Withdrawn'
+
+    class Status(models.TextChoices):
+        NOT_STARTED = 'not_started', 'Not Started'
+        VIEWED = 'viewed', 'Viewed'
+        REDIRECTED = 'redirected', 'Redirected to Official Site'
+        APPLIED = 'applied', 'Applied (Self Reported)'
+        RESULT_RECEIVED = 'result_received', 'Result Received'
 
     student = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
+        CustomUser,
         on_delete=models.CASCADE,
-        related_name='scholarship_applications',
-        db_index=True,
-        verbose_name='Student'
+        related_name='scholarship_interactions',
+        db_index=True
     )
+
     scholarship = models.ForeignKey(
         Scholarship,
-        on_delete=models.PROTECT,
-        related_name='applications',
-        db_index=True,
-        verbose_name='Scholarship'
+        on_delete=models.CASCADE,
+        related_name='interactions',
+        db_index=True
     )
+
     status = models.CharField(
-        max_length=20,
-        choices=ApplicationStatus.choices,
-        default=ApplicationStatus.DRAFT,
-        db_index=True,
-        verbose_name='Application Status'
+        max_length=30,
+        choices=Status.choices,
+        default=Status.NOT_STARTED,
+        db_index=True
     )
-    personal_statement = models.TextField(
-        blank=True,
-        verbose_name='Personal Statement',
-        help_text='Student\'s personal statement or essay'
+
+    applied_at = models.DateTimeField(
+        null=True,
+        blank=True
     )
-    additional_info = models.JSONField(
-        default=dict,
-        blank=True,
-        verbose_name='Additional Information',
-        help_text='Additional application data (flexible schema)'
-    )
-    submitted_at = models.DateTimeField(
+
+    redirected_at = models.DateTimeField(
         null=True,
         blank=True,
+        help_text='Timestamp when user was redirected to official website'
+    )
+
+    notification_sent = models.BooleanField(
+        default=False,
         db_index=True,
-        verbose_name='Submitted At'
+        help_text='Whether follow-up notification has been sent'
     )
-    reviewed_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        verbose_name='Reviewed At'
-    )
-    created_at = models.DateTimeField(
+
+    last_interacted_at = models.DateTimeField(
         default=timezone.now,
+        db_index=True
+    )
+
+    notes = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text='Optional student notes'
+    )
+
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('student', 'scholarship')
+        ordering = ['-updated_at']
+        indexes = [
+            models.Index(fields=['student', 'status']),
+            models.Index(fields=['scholarship', 'status']),
+        ]
+
+    def __str__(self):
+        return f"{self.student_id} - {self.scholarship.title} ({self.status})"
+
+
+class ScholarshipOnboarding(models.Model):
+    """
+    Onboarding data for scholarship personalization.
+    Stores user preferences and eligibility criteria.
+    """
+    
+    class Stream(models.TextChoices):
+        SCIENCE = 'Science', 'Science'
+        COMMERCE = 'Commerce', 'Commerce'
+        ARTS = 'Arts', 'Arts'
+        OTHER = 'Other', 'Other'
+    
+    class Board(models.TextChoices):
+        CBSE = 'CBSE', 'CBSE'
+        ICSE = 'ICSE', 'ICSE'
+        STATE = 'State', 'State Board'
+        IB = 'IB', 'IB'
+        IGCSE = 'IGCSE', 'IGCSE'
+        OTHER = 'Other', 'Other'
+    
+    class Category(models.TextChoices):
+        GENERAL = 'General', 'General'
+        OBC = 'OBC', 'OBC'
+        SC = 'SC', 'SC'
+        ST = 'ST', 'ST'
+        OTHER = 'Other', 'Other'
+    
+    class Gender(models.TextChoices):
+        MALE = 'Male', 'Male'
+        FEMALE = 'Female', 'Female'
+        OTHER = 'Other', 'Other'
+        PREFER_NOT_TO_SAY = 'Prefer not to say', 'Prefer not to say'
+    
+    class FamilyIncomeRange(models.TextChoices):
+        BELOW_1_LAKH = '₹0 – ₹1,00,000', '₹0 – ₹1,00,000'
+        ONE_TO_TWO_FIFTY = '₹1,00,000 – ₹2,50,000', '₹1,00,000 – ₹2,50,000'
+        TWO_FIFTY_TO_FIVE = '₹2,50,000 – ₹5,00,000', '₹2,50,000 – ₹5,00,000'
+        FIVE_TO_TEN = '₹5,00,000 – ₹10,00,000', '₹5,00,000 – ₹10,00,000'
+        ABOVE_TEN = '₹10,00,000+', '₹10,00,000+'
+    
+    user = models.OneToOneField(
+        CustomUser,
+        on_delete=models.CASCADE,
+        related_name='scholarship_onboarding',
         db_index=True,
+        verbose_name='User'
+    )
+    
+    stream = models.CharField(
+        max_length=50,
+        choices=Stream.choices,
+        verbose_name='Stream'
+    )
+    
+    board = models.CharField(
+        max_length=50,
+        choices=Board.choices,
+        verbose_name='Board'
+    )
+    
+    state = models.CharField(
+        max_length=100,
+        verbose_name='State'
+    )
+    
+    category = models.CharField(
+        max_length=50,
+        choices=Category.choices,
+        verbose_name='Category'
+    )
+    
+    family_income_range = models.CharField(
+        max_length=50,
+        choices=FamilyIncomeRange.choices,
+        verbose_name='Family Income Range'
+    )
+    
+    gender = models.CharField(
+        max_length=50,
+        choices=Gender.choices,
+        verbose_name='Gender'
+    )
+    
+    age = models.PositiveIntegerField(
+        verbose_name='Age'
+    )
+    
+    created_at = models.DateTimeField(
+        auto_now_add=True,
         verbose_name='Created At'
     )
+    
     updated_at = models.DateTimeField(
         auto_now=True,
         verbose_name='Updated At'
     )
-
+    
     class Meta:
-        verbose_name = 'Scholarship Application'
-        verbose_name_plural = 'Scholarship Applications'
+        verbose_name = 'Scholarship Onboarding'
+        verbose_name_plural = 'Scholarship Onboardings'
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['student', '-created_at']),
-            models.Index(fields=['scholarship', 'status']),
-            models.Index(fields=['status', '-submitted_at']),
-            models.Index(fields=['student', 'scholarship']),
+            models.Index(fields=['user']),
+            models.Index(fields=['stream', 'state', 'category']),
         ]
-        # Prevent duplicate applications
-        constraints = [
-            models.UniqueConstraint(
-                fields=['student', 'scholarship'],
-                name='unique_scholarship_application',
-                condition=models.Q(status__in=['draft', 'submitted', 'under_review'])
-            )
-        ]
-
+    
     def __str__(self):
-        return f"{self.student.email} - {self.scholarship.title} ({self.get_status_display()})"
-
-
-class ScholarshipDocument(models.Model):
-    """
-    Documents uploaded for a scholarship application.
-    """
-    class DocumentType(models.TextChoices):
-        IDENTITY_PROOF = 'identity_proof', 'Identity Proof'
-        INCOME_CERTIFICATE = 'income_certificate', 'Income Certificate'
-        ACADEMIC_TRANSCRIPT = 'academic_transcript', 'Academic Transcript'
-        MARK_SHEET = 'mark_sheet', 'Mark Sheet'
-        EXAM_SCORE_CARD = 'exam_score_card', 'Exam Score Card'
-        CASTE_CERTIFICATE = 'caste_certificate', 'Caste Certificate'
-        DISABILITY_CERTIFICATE = 'disability_certificate', 'Disability Certificate'
-        BANK_STATEMENT = 'bank_statement', 'Bank Statement'
-        RECOMMENDATION_LETTER = 'recommendation_letter', 'Recommendation Letter'
-        PERSONAL_STATEMENT = 'personal_statement', 'Personal Statement'
-        OTHER = 'other', 'Other'
-
-    application = models.ForeignKey(
-        ScholarshipApplication,
-        on_delete=models.CASCADE,
-        related_name='documents',
-        db_index=True,
-        verbose_name='Application'
-    )
-    document_type = models.CharField(
-        max_length=50,
-        choices=DocumentType.choices,
-        db_index=True,
-        verbose_name='Document Type'
-    )
-    file = models.FileField(
-        upload_to='scholarship_documents/%Y/%m/%d/',
-        verbose_name='Document File'
-    )
-    file_name = models.CharField(
-        max_length=255,
-        verbose_name='File Name',
-        help_text='Original file name'
-    )
-    file_size = models.PositiveIntegerField(
-        verbose_name='File Size (Bytes)'
-    )
-    description = models.CharField(
-        max_length=500,
-        blank=True,
-        verbose_name='Description'
-    )
-    uploaded_at = models.DateTimeField(
-        default=timezone.now,
-        db_index=True,
-        verbose_name='Uploaded At'
-    )
-
-    class Meta:
-        verbose_name = 'Scholarship Document'
-        verbose_name_plural = 'Scholarship Documents'
-        ordering = ['application', 'document_type', '-uploaded_at']
-        indexes = [
-            models.Index(fields=['application', 'document_type']),
-        ]
-
-    def __str__(self):
-        return f"{self.application.student.email} - {self.get_document_type_display()} ({self.file_name})"
-
-
-class ApplicationReview(models.Model):
-    """
-    Admin review of scholarship applications.
-    Provides audit trail for approval/rejection decisions.
-    """
-    class ReviewDecision(models.TextChoices):
-        APPROVED = 'approved', 'Approved'
-        REJECTED = 'rejected', 'Rejected'
-        PENDING = 'pending', 'Pending Review'
-        NEEDS_MORE_INFO = 'needs_more_info', 'Needs More Information'
-
-    application = models.ForeignKey(
-        ScholarshipApplication,
-        on_delete=models.CASCADE,
-        related_name='reviews',
-        db_index=True,
-        verbose_name='Application'
-    )
-    reviewer = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.PROTECT,
-        related_name='scholarship_reviews',
-        db_index=True,
-        verbose_name='Reviewer',
-        help_text='Admin user who reviewed the application'
-    )
-    decision = models.CharField(
-        max_length=20,
-        choices=ReviewDecision.choices,
-        db_index=True,
-        verbose_name='Review Decision'
-    )
-    comments = models.TextField(
-        blank=True,
-        verbose_name='Review Comments',
-        help_text='Internal review notes'
-    )
-    student_feedback = models.TextField(
-        blank=True,
-        verbose_name='Student Feedback',
-        help_text='Feedback message visible to student'
-    )
-    reviewed_at = models.DateTimeField(
-        default=timezone.now,
-        db_index=True,
-        verbose_name='Reviewed At'
-    )
-    created_at = models.DateTimeField(
-        default=timezone.now,
-        verbose_name='Created At'
-    )
-
-    class Meta:
-        verbose_name = 'Application Review'
-        verbose_name_plural = 'Application Reviews'
-        ordering = ['-reviewed_at']
-        indexes = [
-            models.Index(fields=['application', '-reviewed_at']),
-            models.Index(fields=['reviewer', '-reviewed_at']),
-            models.Index(fields=['decision', '-reviewed_at']),
-        ]
-
-    def __str__(self):
-        return f"{self.application.student.email} - {self.get_decision_display()} by {self.reviewer.email}"
-
+        return f"{self.user.email} - Scholarship Onboarding"

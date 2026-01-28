@@ -945,6 +945,8 @@ def get_notifications(request):
             'category_display': notification.get_category_display(),
             'message': notification.message,
             'is_read': notification.is_read,
+            'action_type': notification.action_type,
+            'action_data': notification.action_data,
             'created_at': notification.created_at.isoformat()
         })
     

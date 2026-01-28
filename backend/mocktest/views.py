@@ -537,29 +537,30 @@ class TestAttemptViewSet(viewsets.ModelViewSet):
                     source_id=None
                 )
         
-        # Calculate percentile (simplified - compare with all completed attempts of same test)
+        # Calculate percentile (compare with all completed attempts of same test)
+        # Percentile = (Number of people who scored LESS than or equal to you / Total number of people) * 100
+        # This means: if you scored better than 80% of people, your percentile is 80
         all_attempts = TestAttempt.objects.filter(
             mock_test=attempt.mock_test,
-            is_completed=True
-        ).exclude(id=attempt.id)
+            is_completed=True,
+            score__isnull=False
+        )
         
-        better_scores = all_attempts.filter(score__gt=total_score).count()
-        total_completed = all_attempts.count() + 1
-        attempt.percentile = (better_scores / total_completed * 100) if total_completed > 0 else 0
-        attempt.save()
+        # Include current attempt in the calculation
+        total_completed = all_attempts.count()
         
-        # Now save the attempt (signal will fire and check for test_completed XP)
-        attempt.save()
+        if total_completed > 0:
+            # Count how many people scored less than or equal to this score
+            # (including the current attempt itself)
+            scores_less_or_equal = all_attempts.filter(score__lte=total_score).count()
+            
+            # Percentile = (scores_less_or_equal / total_completed) * 100
+            # This gives the percentage of people you scored better than or equal to
+            attempt.percentile = (scores_less_or_equal / total_completed) * 100
+        else:
+            # If this is the first attempt, percentile is 100 (you're the best!)
+            attempt.percentile = 100.0
         
-        # Calculate percentile (simplified - compare with all completed attempts of same test)
-        all_attempts = TestAttempt.objects.filter(
-            mock_test=attempt.mock_test,
-            is_completed=True
-        ).exclude(id=attempt.id)
-        
-        better_scores = all_attempts.filter(score__gt=total_score).count()
-        total_completed = all_attempts.count() + 1
-        attempt.percentile = (better_scores / total_completed * 100) if total_completed > 0 else 0
         attempt.save()
         
         # Check for streak bonuses
@@ -742,6 +743,53 @@ class TestAttemptViewSet(viewsets.ModelViewSet):
             'attempt_id': attempt.id,
             'total_unattempted': len(unattempted_data),
             'unattempted_questions': unattempted_data
+        })
+    
+    @action(detail=False, methods=['get'], url_path='stats')
+    def stats(self, request):
+        """
+        Get statistics for the authenticated user's test attempts.
+        Returns average_score and best_score.
+        """
+        user = request.user
+        if not user.is_authenticated:
+            return Response(
+                {'detail': 'Authentication required.'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        try:
+            student_profile = user.student_profile
+        except StudentProfile.DoesNotExist:
+            return Response(
+                {'detail': 'Student profile not found.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Get all completed attempts for this student
+        completed_attempts = TestAttempt.objects.filter(
+            student=student_profile,
+            is_completed=True,
+            completed_at__isnull=False
+        ).exclude(score__isnull=True)
+        
+        if not completed_attempts.exists():
+            return Response({
+                'average_score': None,
+                'best_score': None
+            })
+        
+        # Calculate average score and best score
+        from django.db.models import Avg, Max
+        avg_score_result = completed_attempts.aggregate(avg_score=Avg('score'))
+        average_score = avg_score_result['avg_score'] if avg_score_result['avg_score'] is not None else None
+        
+        best_score_result = completed_attempts.aggregate(best_score=Max('score'))
+        best_score = best_score_result['best_score'] if best_score_result['best_score'] is not None else None
+        
+        return Response({
+            'average_score': round(average_score, 2) if average_score is not None else None,
+            'best_score': round(best_score, 2) if best_score is not None else None
         })
 
 
@@ -2039,6 +2087,14 @@ class RoomViewSet(viewsets.ModelViewSet):
         if exclude_status:
             queryset = queryset.exclude(status=exclude_status)
         
+        # For completed rooms: Only show rooms where the user is a participant or host
+        # This ensures users only see their own completed rooms, not others'
+        if status_filter == Room.Status.COMPLETED:
+            queryset = queryset.filter(
+                Q(participants__user=self.request.user, participants__status=RoomParticipant.JOINED) |
+                Q(host=self.request.user)
+            ).distinct()
+        
         # Filter by exam
         exam_id = self.request.query_params.get('exam_id')
         if exam_id:
@@ -2053,7 +2109,7 @@ class RoomViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'], url_path='my-active-room')
     def my_active_room(self, request):
-        """Get the current user's active room (if they're a participant)."""
+        """Get the current user's active room (if they're a participant and haven't submitted)."""
         # Find rooms where user is a participant and room is waiting or active
         participant = RoomParticipant.objects.filter(
             user=request.user,
@@ -2075,6 +2131,18 @@ class RoomViewSet(viewsets.ModelViewSet):
             if room.status != Room.Status.COMPLETED:
                 room.status = Room.Status.COMPLETED
                 room.save()
+            return Response({
+                'has_active_room': False,
+                'room': None
+            })
+        
+        # Check if user has already submitted all questions
+        total_questions = room.room_questions.count()
+        answered_count = participant.attempts.count()
+        has_submitted_all = answered_count >= total_questions
+        
+        # If user has submitted all questions, don't show the banner
+        if has_submitted_all:
             return Response({
                 'has_active_room': False,
                 'room': None

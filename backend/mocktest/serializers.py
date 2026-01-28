@@ -900,6 +900,7 @@ class RoomListSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     privacy_display = serializers.CharField(source='get_privacy_display', read_only=True)
     is_full = serializers.SerializerMethodField()
+    has_submitted = serializers.SerializerMethodField()
     
     class Meta:
         model = Room
@@ -923,6 +924,7 @@ class RoomListSerializer(serializers.ModelSerializer):
             'status_display',
             'start_time',
             'attempt_mode',
+            'has_submitted',
             'created_at',
         ]
         read_only_fields = ['id', 'duration', 'created_at']
@@ -934,6 +936,30 @@ class RoomListSerializer(serializers.ModelSerializer):
     def get_is_full(self, obj):
         """Check if room is full."""
         return obj.is_full()
+    
+    def get_has_submitted(self, obj):
+        """Check if current user has submitted all questions."""
+        request = self.context.get('request')
+        if not request or not request.user or not request.user.is_authenticated:
+            return False
+        
+        # Only check for active or completed rooms
+        if obj.status not in [Room.Status.ACTIVE, Room.Status.COMPLETED]:
+            return False
+        
+        # Check if user is a participant
+        participant = obj.participants.filter(
+            user=request.user,
+            status=RoomParticipant.JOINED
+        ).first()
+        
+        if not participant:
+            return False
+        
+        # Check if user has answered all questions
+        total_questions = obj.room_questions.count()
+        answered_count = participant.attempts.count()
+        return answered_count >= total_questions
 
 
 class RoomDetailSerializer(serializers.ModelSerializer):

@@ -515,6 +515,7 @@ class Notification(models.Model):
         GUILD = 'GUILD', 'Guild'
         GENERAL = 'GENERAL', 'General'
         TASK = 'TASK', 'Task'
+        SCHOLARSHIP = 'SCHOLARSHIP', 'Scholarship'
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -536,6 +537,20 @@ class Notification(models.Model):
         default=False,
         db_index=True,
         verbose_name='Is Read'
+    )
+    # Interactive notification fields
+    action_type = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text='Type of action (e.g., "scholarship_apply_confirm")',
+        verbose_name='Action Type'
+    )
+    action_data = models.JSONField(
+        blank=True,
+        null=True,
+        help_text='Additional data for the action (e.g., {"interaction_id": 1})',
+        verbose_name='Action Data'
     )
     created_at = models.DateTimeField(
         auto_now_add=True,
